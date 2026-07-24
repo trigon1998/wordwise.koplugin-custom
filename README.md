@@ -3,7 +3,7 @@
 Code-only maintenance fork of the KOReader Word Wise overlay, targeting
 KOReader 2026.03 “Snowflake” on Android and the iReader Ocean 5 Pro.
 
-Current plugin version: `2026.07.1-rc1.2.2`.
+Current plugin version: `2026.07.1-rc1.3.0`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -29,6 +29,33 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.3.0 Battery Optimization
+
+RC1.3.0 reduces avoidable CPU and SQLite work while preserving the RC1.2
+rendering and data behavior:
+
+- coalesces back-to-back KOReader position/page events into one hint scan on
+  the next UI tick;
+- builds a compact, lazy first-word index for the 2–5-word phrases in the
+  active database;
+- attempts only phrase lengths that can actually begin with the visible word;
+- includes multi-word aliases in the phrase index;
+- ignores irregular mappings whose target entry does not exist;
+- closes one-shot phrase-index statements after the index is built;
+- exposes opt-in counters under **Word Wise → Performance counters** and
+  **Diagnostics**.
+
+Word Wise still scans only the currently visible page. RC1.3.0 does not limit
+coverage to one paragraph because that would remove hints from other visible
+paragraphs. No battery percentage claim is made until the build is measured on
+the target reader.
+
+The active dictionary remains lazy-loaded. Database files, `known_words.db`
+and per-book settings are not migrated or replaced.
+
+Use [PERFORMANCE_TEST.md](PERFORMANCE_TEST.md) for the controlled on-device
+comparison against RC1.2.2.
 
 ## RC1.2.2 OTA Test
 
@@ -138,6 +165,7 @@ for file in ./*.lua; do
 done
 
 npx --yes --package=fengari-node-cli fengari tests/test_main.lua
+npx --yes --package=fengari-node-cli fengari tests/test_db.lua
 npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
 ```
 
@@ -149,7 +177,7 @@ npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
 4. Create and push the matching tag, for example:
 
    ```bash
-   git tag v2026.07.1-rc1.2.2
+   git tag v2026.07.1-rc1.3.0
    git push origin main --tags
    ```
 
@@ -173,12 +201,11 @@ Word Wise → Updates → Restore previous version
 If it does not load, exit KOReader and manually copy the backup files back to
 `koreader/plugins/wordwise.koplugin/`.
 
-## RC1.2.2 scope
+## RC1.3.0 scope
 
-- Provides a version-only successor for the first end-to-end OTA update test.
-- Keeps the RC1.2.1 updater bootstrap, repository packaging, tests and release
-  automation unchanged.
-- Keeps the RC1.2 visible-hint tap fix, layout-aware cache and five-word phrase
-  support.
-- Does not include the planned RC1.3 battery optimizations.
+- Keeps the verified RC1.2.2 updater, visible-hint tap fix, layout-aware cache
+  and five-word phrase support.
+- Reduces duplicate page computations and impossible phrase lookups.
+- Adds optional on-device performance counters for measurement.
 - Does not change any database or user setting schema.
+- Does not replace dictionary databases, known words or book sidecars.

@@ -3,7 +3,7 @@
 -- Public GitHub Releases endpoint used by the on-device updater. Users can
 -- still override this value from Word Wise > Updates on the device.
 return {
-    version = "2026.07.1-rc1.2.2",
+    version = "2026.07.1-rc1.3.0",
     plugin_id = "wordwise.koplugin",
     asset_basename = "wordwise.koplugin",
     default_repository = "trigon1998/wordwise.koplugin-custom",

@@ -13,12 +13,23 @@ SELECT alias, term, case_sensitive FROM aliases
 WHERE alias = ?1 COLLATE NOCASE ORDER BY case_sensitive DESC LIMIT 4;
 ]]
 local IRREGULAR_SQL = [[
-SELECT lemma FROM irregular_forms WHERE surface = ?1 COLLATE NOCASE LIMIT 1;
+SELECT i.lemma
+FROM irregular_forms AS i
+JOIN entries AS e ON e.term = i.lemma COLLATE NOCASE
+WHERE i.surface = ?1 COLLATE NOCASE
+LIMIT 1;
 ]]
 local META_SQL = "SELECT value FROM metadata WHERE key = ?1 LIMIT 1;"
+local PHRASE_ENTRY_SQL = [[
+SELECT term FROM entries WHERE phrase_len BETWEEN 2 AND 5;
+]]
+local PHRASE_ALIAS_SQL = [[
+SELECT alias FROM aliases WHERE instr(trim(alias), ' ') > 0;
+]]
 
 local WordWiseDB = {}
 WordWiseDB.__index = WordWiseDB
+local EMPTY_PHRASE_LENGTHS = {}
 
 local NO_DEINFLECT = {
     morning = true, evening = true, passing = true, news = true,
@@ -37,6 +48,17 @@ local function normalize(s)
          :gsub("–", "-"):gsub("—", "-")
          :gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
     return s:lower()
+end
+
+local function phrase_shape(surface)
+    local normalized = normalize(surface)
+    local first
+    local length = 0
+    for word in normalized:gmatch("%S+") do
+        if not first then first = word end
+        length = length + 1
+    end
+    return first, length
 end
 
 local function regular_candidates(w)
@@ -105,13 +127,70 @@ function WordWiseDB.open(path)
         self.alias_stmt = conn:prepare(ALIAS_SQL)
         self.irregular_stmt = conn:prepare(IRREGULAR_SQL)
         self.meta_stmt = conn:prepare(META_SQL)
+        self.phrase_entry_stmt = conn:prepare(PHRASE_ENTRY_SQL)
+        self.phrase_alias_stmt = conn:prepare(PHRASE_ALIAS_SQL)
     end)
-    if not ok2 or not self.entry_stmt or not self.alias_stmt or not self.irregular_stmt then
+    if not ok2 or not self.entry_stmt or not self.alias_stmt or not self.irregular_stmt
+        or not self.meta_stmt or not self.phrase_entry_stmt or not self.phrase_alias_stmt then
         logger.warn("WordWiseDB: schema prepare failed", tostring(err))
         pcall(function() conn:close() end)
         return nil, "incompatible database schema"
     end
     return self
+end
+
+function WordWiseDB:_ensurePhraseIndex()
+    if self.phrase_lengths_by_head then return end
+    local index = {}
+    local function add(surface)
+        local first, length = phrase_shape(surface)
+        if not first or length < 2 or length > 5 then return end
+        local lengths = index[first]
+        if not lengths then
+            lengths = {}
+            index[first] = lengths
+        end
+        lengths[length] = true
+    end
+
+    local ok, err = pcall(function()
+        for _, stmt in ipairs({ self.phrase_entry_stmt, self.phrase_alias_stmt }) do
+            stmt:reset():clearbind()
+            while true do
+                local row = stmt:step()
+                if not row then break end
+                add(row[1])
+            end
+            stmt:clearbind():reset()
+        end
+    end)
+    if not ok then
+        logger.warn("WordWiseDB: phrase index failed", tostring(err))
+        error(err)
+    end
+
+    for first, length_set in pairs(index) do
+        local lengths = {}
+        for length = 5, 2, -1 do
+            if length_set[length] then lengths[#lengths + 1] = length end
+        end
+        index[first] = lengths
+    end
+    self.phrase_lengths_by_head = index
+
+    -- These statements are one-shot: release them after building the compact
+    -- first-word index so only the active dictionary keeps lookup statements.
+    for _, name in ipairs({ "phrase_entry_stmt", "phrase_alias_stmt" }) do
+        local stmt = self[name]
+        if stmt then pcall(function() stmt:close() end) end
+        self[name] = nil
+    end
+end
+
+function WordWiseDB:getPhraseLengths(first_word)
+    self:_ensurePhraseIndex()
+    local first = phrase_shape(first_word)
+    return (first and self.phrase_lengths_by_head[first]) or EMPTY_PHRASE_LENGTHS
 end
 
 function WordWiseDB:_cache_put(key, value)
@@ -234,7 +313,10 @@ function WordWiseDB:clearCache()
 end
 
 function WordWiseDB:close()
-    for _, stmt in ipairs({ self.entry_stmt, self.alias_stmt, self.irregular_stmt, self.meta_stmt }) do
+    for _, stmt in ipairs({
+        self.entry_stmt, self.alias_stmt, self.irregular_stmt, self.meta_stmt,
+        self.phrase_entry_stmt, self.phrase_alias_stmt,
+    }) do
         if stmt then pcall(function() stmt:close() end) end
     end
     if self.conn then pcall(function() self.conn:close() end) end

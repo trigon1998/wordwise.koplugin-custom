@@ -46,6 +46,7 @@ local WORD_WALK_GUARD = 4000
 local PAGE_CACHE_LIMIT = 3
 local DEFAULT_AUTO_SPACING = 148
 local DOMAIN_LABELS = { general = "General", economics = "Economics", physics = "Physics" }
+local DEFAULT_PHRASE_LENGTHS = { 5, 4, 3, 2 }
 local LAYOUT_HASH_MOD_A = 2147483647
 local LAYOUT_HASH_MOD_B = 2147483629
 
@@ -127,6 +128,35 @@ function WordWise:isEnabled()
     return (ds and ds:isTrue("wordwise_enabled")) or false
 end
 
+function WordWise:isPerformanceDiagnosticsEnabled()
+    return G_reader_settings:readSetting("wordwise_performance_diagnostics") == true
+end
+
+function WordWise:resetPerformanceStats()
+    self.performance_stats = {
+        compute_requests = 0,
+        coalesced_requests = 0,
+        scans = 0,
+        page_cache_hits = 0,
+        page_cache_misses = 0,
+        total_phrase_probes = 0,
+        last_words = 0,
+        last_phrase_probes = 0,
+        last_scan_ms = 0,
+        max_scan_ms = 0,
+    }
+end
+
+function WordWise:getPerformanceStats()
+    if not self.performance_stats then self:resetPerformanceStats() end
+    return self.performance_stats
+end
+
+function WordWise:setPerformanceDiagnostics(enabled)
+    G_reader_settings:saveSetting("wordwise_performance_diagnostics", enabled == true)
+    self:resetPerformanceStats()
+end
+
 function WordWise:buildGlossFace()
     local choice = self:getGlossFontName()
     local name = choice
@@ -189,6 +219,8 @@ function WordWise:init()
     self.page_cache, self.page_cache_order = {}, {}
     self.spacing_candidate, self.spacing_candidate_count = nil, 0
     self.spacing_cooldown = 0
+    self.compute_pending = nil
+    self:resetPerformanceStats()
     self.failure_notified = false
     self:buildGlossFace()
     self.proper_names = {}
@@ -405,6 +437,7 @@ function WordWise:onReaderReady()
 end
 
 function WordWise:onCloseDocument()
+    self.compute_pending = nil
     self:closeDB()
     if self.known_words then self.known_words:close() end
     self.known_words = nil
@@ -412,11 +445,32 @@ function WordWise:onCloseDocument()
     self.page_cache, self.page_cache_order = {}, {}
 end
 
-function WordWise:onPosUpdate() self:safeComputePageHints() end
-function WordWise:onPageUpdate() self:safeComputePageHints() end
+function WordWise:schedulePageHintCompute()
+    local stats
+    if self:isPerformanceDiagnosticsEnabled() then
+        stats = self:getPerformanceStats()
+        stats.compute_requests = stats.compute_requests + 1
+    end
+    if self.compute_pending then
+        if stats then stats.coalesced_requests = stats.coalesced_requests + 1 end
+        return
+    end
+
+    local token = {}
+    self.compute_pending = token
+    UIManager:nextTick(function()
+        if self.compute_pending ~= token then return end
+        self.compute_pending = nil
+        self:safeComputePageHints()
+    end)
+end
+
+function WordWise:onPosUpdate() self:schedulePageHintCompute() end
+function WordWise:onPageUpdate() self:schedulePageHintCompute() end
 function WordWise:onSetDimensions()
     -- Rotation can briefly leave the previous page coordinates on screen.
     -- Drop both hints and cached coordinates before KOReader finishes reflowing.
+    self.compute_pending = nil
     self.hints = {}
     self:clearPageCache()
 end
@@ -529,9 +583,31 @@ function WordWise:makeHint(entry, surface, records, first, last, confidence)
     }
 end
 
+function WordWise:finishPerformanceScan(started, word_count, phrase_probes, cache_hit)
+    if not started then return end
+    local stats = self:getPerformanceStats()
+    local elapsed_ms = math.max(0, (os.clock() - started) * 1000)
+    stats.last_words = word_count or 0
+    stats.last_phrase_probes = phrase_probes or 0
+    stats.total_phrase_probes = stats.total_phrase_probes + (phrase_probes or 0)
+    stats.last_scan_ms = elapsed_ms
+    stats.max_scan_ms = math.max(stats.max_scan_ms, elapsed_ms)
+    if cache_hit then
+        stats.page_cache_hits = stats.page_cache_hits + 1
+    else
+        stats.page_cache_misses = stats.page_cache_misses + 1
+    end
+end
+
 function WordWise:computePageHints()
     self.hints = {}
     if not (self:isEnabled() and self:isSupportedDocument()) then return end
+    local started
+    if self:isPerformanceDiagnosticsEnabled() then
+        started = os.clock()
+        local stats = self:getPerformanceStats()
+        stats.scans = stats.scans + 1
+    end
     local db, err = self:getDB()
     if not db then error(err or "database unavailable") end
 
@@ -548,6 +624,7 @@ function WordWise:computePageHints()
     if cached then
         self.hints = cached
         self:considerAutoSpacing(#cached)
+        self:finishPerformanceScan(started, #records, 0, true)
         return
     end
 
@@ -561,21 +638,27 @@ function WordWise:computePageHints()
         end
     end
 
-    local candidates, i, level = {}, 1, self:getHintLevel()
+    local candidates, i, level, phrase_probes = {}, 1, self:getHintLevel(), 0
     while i <= #records do
         local matched, consumed
-        for length = math.min(MAX_PHRASE_WORDS, #records - i + 1), 2, -1 do
-            local surfaces = {}
-            for j = i, i + length - 1 do surfaces[#surfaces + 1] = records[j].key end
-            local phrase = table.concat(surfaces, " ")
-            local entry = db:lookupExact(phrase)
-            if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
-                local context = self:contextWords(records, i, i + length - 1)
-                local accepted, confidence = ContextScorer.accept(entry, context)
-                if accepted then
-                    matched = self:makeHint(entry, phrase, records, i, i + length - 1, confidence)
-                    consumed = length
-                    break
+        local remaining = math.min(MAX_PHRASE_WORDS, #records - i + 1)
+        local phrase_lengths = db.getPhraseLengths
+            and db:getPhraseLengths(records[i].key) or DEFAULT_PHRASE_LENGTHS
+        for _, length in ipairs(phrase_lengths) do
+            if length <= remaining then
+                phrase_probes = phrase_probes + 1
+                local surfaces = {}
+                for j = i, i + length - 1 do surfaces[#surfaces + 1] = records[j].key end
+                local phrase = table.concat(surfaces, " ")
+                local entry = db:lookupExact(phrase)
+                if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
+                    local context = self:contextWords(records, i, i + length - 1)
+                    local accepted, confidence = ContextScorer.accept(entry, context)
+                    if accepted then
+                        matched = self:makeHint(entry, phrase, records, i, i + length - 1, confidence)
+                        consumed = length
+                        break
+                    end
                 end
             end
         end
@@ -620,6 +703,7 @@ function WordWise:computePageHints()
     self.hints = candidates
     self:cachePage(cache_key, candidates)
     self:considerAutoSpacing(#candidates)
+    self:finishPerformanceScan(started, #records, phrase_probes, false)
 end
 
 function WordWise:safeComputePageHints()
@@ -794,6 +878,7 @@ function WordWise:onHintTap(ges)
 end
 
 function WordWise:refresh()
+    self.compute_pending = nil
     self:safeComputePageHints()
     UIManager:setDirty("all", "ui")
 end
@@ -872,6 +957,20 @@ function WordWise:diagnosticsText()
         "Page hints: " .. tostring(#(self.hints or {})),
         "Update repository: " .. (WordWiseUpdater.getRepository() or "not configured"),
     }
+    if self:isPerformanceDiagnosticsEnabled() then
+        local stats = self:getPerformanceStats()
+        details[#details + 1] = string.format(
+            "Performance: %d requests · %d coalesced",
+            stats.compute_requests, stats.coalesced_requests)
+        details[#details + 1] = string.format(
+            "Scans: %d · page cache hits: %d",
+            stats.scans, stats.page_cache_hits)
+        details[#details + 1] = string.format(
+            "Last scan: %d words · %d phrase probes · %.1f ms",
+            stats.last_words, stats.last_phrase_probes, stats.last_scan_ms)
+    else
+        details[#details + 1] = "Performance counters: off"
+    end
     for _, line in ipairs(details) do lines[#lines + 1] = line end
     return table.concat(lines, "\n")
 end
@@ -1008,10 +1107,18 @@ function WordWise:getSubMenu()
             sub_item_table_func = function() return WordWiseUpdater.getMenuItems() end,
         },
         {
+            text = _("Performance counters"),
+            checked_func = function() return self:isPerformanceDiagnosticsEnabled() end,
+            callback = function()
+                self:setPerformanceDiagnostics(not self:isPerformanceDiagnosticsEnabled())
+            end,
+        },
+        {
             text = _("Clear cache"),
             callback = function()
                 self:clearPageCache()
                 if self.db then self.db:clearCache() end
+                self:resetPerformanceStats()
                 self:refresh()
                 UIManager:show(InfoMessage:new{ text = _("Word Wise cache cleared.") })
             end,

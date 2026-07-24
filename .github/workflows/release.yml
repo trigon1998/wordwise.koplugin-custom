@@ -31,6 +31,7 @@ jobs:
             npx --yes luaparse "$file" >/dev/null
           done
           npx --yes --package=fengari-node-cli fengari tests/test_main.lua
+          npx --yes --package=fengari-node-cli fengari tests/test_db.lua
           npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
 
       - name: Build and verify code-only assets
