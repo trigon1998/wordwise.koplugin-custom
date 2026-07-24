@@ -3,7 +3,7 @@
 Code-only maintenance fork of the KOReader Word Wise overlay, targeting
 KOReader 2026.03 “Snowflake” on Android and the iReader Ocean 5 Pro.
 
-Current plugin version: `2026.07.1-rc1.2.1`.
+Current plugin version: `2026.07.1-rc1.2.2`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -25,9 +25,22 @@ Known words remain under:
 
 Per-book settings remain in KOReader sidecars.
 
-The upstream repository currently does not include an explicit source-code
-license file. See [NOTICE.md](NOTICE.md) before publishing this repository or
-its release assets publicly.
+The upstream repository does not publish an explicit open-source license. The
+repository owner confirms private permission from the upstream author to
+modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
+scope of that notice.
+
+## RC1.2.2 OTA Test
+
+RC1.2.2 is a deliberately minimal successor to RC1.2.1 for validating the
+complete on-device update path:
+
+```text
+RC1.2.1 → Check for updates → RC1.2.2 → Restart KOReader
+```
+
+It changes version and distribution metadata only. Runtime behavior, database
+formats, known words and per-book settings remain unchanged.
 
 ## RC1.2.1 Updater Bootstrap
 
@@ -69,9 +82,7 @@ Word Wise → Updates → Repository
 ```
 
 The repository must be public. This bootstrap intentionally does not store a
-GitHub personal access token on the reading device. A private staging
-repository is therefore inaccessible to the updater until its visibility is
-changed to public.
+GitHub personal access token on the reading device.
 
 Because the current build is an RC, **Include prerelease/RC updates** defaults
 to enabled. Stable builds default to the stable channel.
@@ -138,7 +149,7 @@ npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
 4. Create and push the matching tag, for example:
 
    ```bash
-   git tag v2026.07.1-rc1.2.1
+   git tag v2026.07.1-rc1.2.2
    git push origin main --tags
    ```
 
@@ -162,10 +173,11 @@ Word Wise → Updates → Restore previous version
 If it does not load, exit KOReader and manually copy the backup files back to
 `koreader/plugins/wordwise.koplugin/`.
 
-## RC1.2.1 scope
+## RC1.2.2 scope
 
-- Adds only the updater bootstrap, version metadata, repository packaging,
-  tests and release automation.
+- Provides a version-only successor for the first end-to-end OTA update test.
+- Keeps the RC1.2.1 updater bootstrap, repository packaging, tests and release
+  automation unchanged.
 - Keeps the RC1.2 visible-hint tap fix, layout-aware cache and five-word phrase
   support.
 - Does not include the planned RC1.3 battery optimizations.

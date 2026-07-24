@@ -194,9 +194,9 @@ matcher:computePageHints()
 assert(exact_lookups > first_pass_lookups, "changed coordinates must bypass the stale page cache")
 
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.2%.1"),
-    "diagnostics must expose the RC1.2.1 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.2%.2"),
+    "diagnostics must expose the RC1.2.2 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 
-print("RC1.2.1 main behavior tests: PASS")
+print("RC1.2.2 main behavior tests: PASS")
