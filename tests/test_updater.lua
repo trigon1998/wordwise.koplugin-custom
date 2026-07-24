@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.2.2",
+assert_equal(metadata.version, "2026.07.1-rc1.3.0",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -59,11 +59,8 @@ assert(not Updater.isValidRepository("owner/repo;touch-x"),
     "shell punctuation must be rejected")
 
 assert_equal(Updater.compareVersions(
-    "2026.07.1-rc1.2.2", "2026.07.1-rc1.2.1"), 1,
-    "OTA test patch must be newer than the updater bootstrap")
-assert_equal(Updater.compareVersions(
-    "2026.07.1-rc1.3", "2026.07.1-rc1.2.2"), 1,
-    "RC1.3 must be newer than the bootstrap")
+    "2026.07.1-rc1.3.0", "2026.07.1-rc1.2.2"), 1,
+    "RC1.3 battery build must be newer than the OTA test")
 assert_equal(Updater.compareVersions(
     "2026.07.1", "2026.07.1-rc1.99"), 1,
     "stable release must be newer than its RC")
@@ -73,24 +70,24 @@ assert_equal(Updater.compareVersions(
 assert_equal(Updater.compareVersions("bad-version", "2026.07.1"), nil,
     "unsupported versions must fail closed")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.2.2")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.2.2.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.3.0")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.3.0.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
 
 local releases = {
-    { tag_name = "v2026.07.1-rc1.2.3", prerelease = true, draft = false },
-    { tag_name = "v2026.07.1-rc1.3", prerelease = true, draft = false },
+    { tag_name = "v2026.07.1-rc1.3.1", prerelease = true, draft = false },
+    { tag_name = "v2026.07.1-rc1.4.0", prerelease = true, draft = false },
     { tag_name = "v2026.08.1-rc1.0", prerelease = true, draft = true },
     { tag_name = "v2026.06.9", prerelease = false, draft = false },
 }
 assert_equal(
-    Updater.selectRelease(releases, "2026.07.1-rc1.2.2", true).tag_name,
-    "v2026.07.1-rc1.3",
+    Updater.selectRelease(releases, "2026.07.1-rc1.3.0", true).tag_name,
+    "v2026.07.1-rc1.4.0",
     "RC channel must select the newest eligible non-draft release")
 assert_equal(
-    Updater.selectRelease(releases, "2026.07.1-rc1.2.2", false),
+    Updater.selectRelease(releases, "2026.07.1-rc1.3.0", false),
     nil,
     "stable channel must ignore prereleases")
 
@@ -99,7 +96,7 @@ local mixed_releases = {
     { tag_name = "v2026.07.1", prerelease = false, draft = false },
 }
 assert_equal(
-    Updater.selectRelease(mixed_releases, "2026.07.1-rc1.2.2", false).tag_name,
+    Updater.selectRelease(mixed_releases, "2026.07.1-rc1.3.0", false).tag_name,
     "v2026.07.1",
     "stable channel must select a stable successor")
 
@@ -125,16 +122,16 @@ Updater.setIncludesPrereleases(false)
 assert_equal(Updater.includesPrereleases(), false,
     "release-channel preference must be saved")
 
-local ota_test_release = {
-    { tag_name = "v2026.07.1-rc1.2.2", prerelease = true, draft = false },
+local battery_release = {
+    { tag_name = "v2026.07.1-rc1.3.0", prerelease = true, draft = false },
 }
 assert_equal(
-    Updater.selectRelease(ota_test_release, "2026.07.1-rc1.2.1", true).tag_name,
-    "v2026.07.1-rc1.2.2",
-    "RC1.2.1 must discover the RC1.2.2 OTA test release")
+    Updater.selectRelease(battery_release, "2026.07.1-rc1.2.2", true).tag_name,
+    "v2026.07.1-rc1.3.0",
+    "RC1.2.2 must discover the RC1.3.0 battery release")
 assert_equal(
-    Updater.selectRelease(ota_test_release, "2026.07.1-rc1.2.2", true),
+    Updater.selectRelease(battery_release, "2026.07.1-rc1.3.0", true),
     nil,
-    "RC1.2.2 must not offer itself as an update")
+    "RC1.3.0 must not offer itself as an update")
 
-print("RC1.2.2 updater logic tests: PASS")
+print("RC1.3.0 updater logic tests: PASS")

@@ -12,6 +12,8 @@ function WidgetContainer:extend(definition)
     return definition
 end
 
+local scheduled_callbacks = {}
+
 package.preload["ffi/blitbuffer"] = function()
     return { COLOR_DARK_GRAY = 1, COLOR_BLACK = 0 }
 end
@@ -31,7 +33,9 @@ package.preload["ui/widget/textviewer"] = function() return widget_class() end
 package.preload["ui/uimanager"] = function()
     return {
         close = function() end,
-        nextTick = function(callback) callback() end,
+        nextTick = function(_, callback)
+            scheduled_callbacks[#scheduled_callbacks + 1] = callback
+        end,
         setDirty = function() end,
         show = function() end,
     }
@@ -155,6 +159,10 @@ function phrase_db:lookupExact(term)
         }
     end
 end
+function phrase_db:getPhraseLengths(first_word)
+    if first_word == "earnings" then return { 5 } end
+    return {}
+end
 function phrase_db:lookupWord() return nil end
 function phrase_db:getMetadata(key)
     local values = { build_version = "2026.07.1-rc1", entry_count = 28118, phrase_count = 240 }
@@ -187,16 +195,87 @@ matcher:computePageHints()
 assert_equal(#matcher.hints, 1, "five-word phrase must create one hint")
 assert_equal(matcher.hints[1].phrase_len, 5, "five-word phrase length must be retained")
 local first_pass_lookups = exact_lookups
+assert_equal(first_pass_lookups, 1,
+    "phrase-head index must avoid impossible phrase-length probes")
 matcher:computePageHints()
 assert_equal(exact_lookups, first_pass_lookups, "unchanged layout must reuse the page cache")
 phrase_records[1].box.x = 2
 matcher:computePageHints()
 assert(exact_lookups > first_pass_lookups, "changed coordinates must bypass the stale page cache")
 
+local plain_records = {}
+for index = 1, 80 do
+    plain_records[index] = {
+        key = "ordinary" .. tostring(index),
+        surface = "ordinary" .. tostring(index),
+        box = { x = (index % 8) * 20, y = math.floor(index / 8) * 20, w = 18, h = 12 },
+    }
+end
+local impossible_phrase_probes = 0
+local plain_word_lookups = 0
+local plain_db = {}
+function plain_db:getPhraseLengths() return {} end
+function plain_db:lookupExact()
+    impossible_phrase_probes = impossible_phrase_probes + 1
+end
+function plain_db:lookupWord()
+    plain_word_lookups = plain_word_lookups + 1
+end
+local plain_matcher = instance({
+    hints = {},
+    page_cache = {},
+    page_cache_order = {},
+    proper_names = {},
+    ui = matcher.ui,
+})
+function plain_matcher:isEnabled() return true end
+function plain_matcher:isSupportedDocument() return true end
+function plain_matcher:getDB() return plain_db end
+function plain_matcher:collectVisibleWords() return plain_records, 8 end
+function plain_matcher:getDomain() return "general" end
+function plain_matcher:getHintLevel() return 5 end
+function plain_matcher:getGlossFontName() return "infofont" end
+function plain_matcher:getGlossFontSize() return 13 end
+function plain_matcher:currentLineSpacing() return 148 end
+function plain_matcher:isKnown() return false end
+function plain_matcher:considerAutoSpacing() end
+plain_matcher:computePageHints()
+assert_equal(impossible_phrase_probes, 0,
+    "words absent from the phrase-head index must not query phrase SQL")
+assert_equal(plain_word_lookups, #plain_records,
+    "phrase pruning must preserve normal word lookups")
+
+local scheduled_computes = 0
+local scheduler = instance({
+    hints = {},
+    page_cache = {},
+    page_cache_order = {},
+})
+function scheduler:isPerformanceDiagnosticsEnabled() return true end
+function scheduler:safeComputePageHints() scheduled_computes = scheduled_computes + 1 end
+scheduler:onPosUpdate()
+scheduler:onPageUpdate()
+assert_equal(#scheduled_callbacks, 1,
+    "back-to-back KOReader events must share one scheduled computation")
+assert_equal(scheduler:getPerformanceStats().compute_requests, 2,
+    "performance counters must record incoming compute requests")
+assert_equal(scheduler:getPerformanceStats().coalesced_requests, 1,
+    "performance counters must record coalesced requests")
+scheduled_callbacks[1]()
+assert_equal(scheduled_computes, 1,
+    "coalesced events must execute exactly one hint computation")
+scheduler:onPageUpdate()
+scheduler:onSetDimensions()
+scheduled_callbacks[2]()
+assert_equal(scheduled_computes, 1,
+    "rotation must invalidate a computation scheduled with stale coordinates")
+
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.2%.2"),
-    "diagnostics must expose the RC1.2.2 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.0"),
+    "diagnostics must expose the RC1.3.0 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
+assert(diagnostics:find("Performance counters: off", 1, true),
+    "performance counters must remain opt-in")
 
-print("RC1.2.2 main behavior tests: PASS")
+print("RC1.3.0 main behavior tests: PASS")
