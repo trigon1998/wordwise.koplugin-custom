@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify tag and version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^[[:space:]]*version = "\([^"]*\)",[[:space:]]*$/\1/p' update_config.lua)"
+          test "$GITHUB_REF_NAME" = "v$version"
+
+      - name: Parse and test Lua
+        shell: bash
+        run: |
+          for file in ./*.lua; do
+            npx --yes luaparse "$file" >/dev/null
+          done
+          npx --yes --package=fengari-node-cli fengari tests/test_main.lua
+          npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
+
+      - name: Build and verify code-only assets
+        shell: bash
+        run: |
+          chmod +x tools/build_release.sh tools/verify_release.sh
+          ./tools/build_release.sh
+          ./tools/verify_release.sh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease=()
+          if [[ "$version" == *-* ]]; then
+            prerelease+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/wordwise.koplugin-v${version}.zip" \
+            "dist/wordwise.koplugin-v${version}.zip.sha256" \
+            --generate-notes \
+            "${prerelease[@]}"

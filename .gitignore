@@ -1,0 +1,16 @@
+# Word Wise databases and user data must never enter this code repository.
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+known_words.db
+koreader/wordwise/
+
+# Generated release files.
+dist/
+
+# Local/editor files.
+.DS_Store
+*.log
+*.tmp
+node_modules/

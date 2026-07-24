@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Reject databases and user data
+        shell: bash
+        run: |
+          if find . -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) -print -quit | grep -q .; then
+            echo "Database file found in code-only repository"
+            exit 1
+          fi
+
+      - name: Parse Lua
+        shell: bash
+        run: |
+          for file in ./*.lua; do
+            npx --yes luaparse "$file" >/dev/null
+          done
+
+      - name: Behavior tests
+        shell: bash
+        run: |
+          npx --yes --package=fengari-node-cli fengari tests/test_main.lua
+          npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
+
+      - name: Build and verify release
+        shell: bash
+        run: |
+          chmod +x tools/build_release.sh tools/verify_release.sh
+          ./tools/build_release.sh
+          ./tools/verify_release.sh
