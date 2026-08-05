@@ -17,9 +17,10 @@ trap 'rm -rf "$temporary_dir"' EXIT
 plugin_dir="$temporary_dir/wordwise.koplugin"
 mkdir -p "$plugin_dir" "$dist_dir"
 
+# Keep this set compatible with the fixed RC1.3.0 updater allow-list.
+# Repository-only documentation must not be added here.
 release_files=(
     _meta.lua
-    DATA_MAINTENANCE.md
     main.lua
     wordwise_db.lua
     known_words.lua

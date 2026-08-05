@@ -20,7 +20,6 @@ unzip -t "$archive" >/dev/null
 expected="$(
     printf '%s\n' \
         wordwise.koplugin/ \
-        wordwise.koplugin/DATA_MAINTENANCE.md \
         wordwise.koplugin/NOTICE.md \
         wordwise.koplugin/README.md \
         wordwise.koplugin/_meta.lua \
@@ -33,6 +32,13 @@ expected="$(
         wordwise.koplugin/wordwise_updater.lua
 )"
 actual="$(unzip -Z1 "$archive" | LC_ALL=C sort)"
+
+# Explicit bootstrap regression guard: RC1.3.0 rejects every path outside its
+# immutable runtime allow-list.
+if unzip -Z1 "$archive" | grep -Fqx "wordwise.koplugin/DATA_MAINTENANCE.md"; then
+    echo "Repository-only documentation found in legacy-compatible OTA ZIP" >&2
+    exit 1
+fi
 
 if [[ "$actual" != "$expected" ]]; then
     echo "Unexpected release contents:" >&2

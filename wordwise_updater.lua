@@ -42,7 +42,6 @@ local INSTALL_ORDER = {
     "wordwise_updater.lua",
     "update_config.lua",
     "README.md",
-    "DATA_MAINTENANCE.md",
     "NOTICE.md",
     "main.lua",
     "_meta.lua",

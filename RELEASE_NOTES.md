@@ -1,33 +1,17 @@
-# Word Wise 2026.07.1-rc1.3.1
+# Word Wise 2026.07.1-rc1.3.2
 
-RC1.3.1 is an emergency data-integrity and Full OTA release.
+RC1.3.2 is a bootstrap-compatibility hotfix for the RC1.3.1 Full OTA release.
 
-## Critical correctness fixes
+## Fixed
 
-- Fixes unrelated Vietnamese senses such as `appealing → van lơn`.
-- Prevents unsafe morphology such as `gaming → gam`.
-- Removes orphan/wrong-POS irregular mappings, ambiguous aliases and invalid
-  phrase lengths.
-- Publishes Vietnamese only for explicitly reviewed General rows or curated
-  domain rows; unreviewed entries remain available with English definitions.
+- Removes the repository-only `DATA_MAINTENANCE.md` document from the runtime plugin ZIP.
+- Restores exact compatibility with the fixed archive allow-list in RC1.3.0 and older code-only updaters.
+- Adds a release regression guard so future plugin ZIPs cannot accidentally add files outside the legacy OTA contract.
 
-## Full OTA
+## Full OTA path
 
-The Release contains four exact assets: plugin ZIP/checksum and database
-ZIP/checksum. RC1.3.1 verifies the outer checksum, fixed archive allow-list,
-database manifest, per-file SHA-256, SQLite integrity, schema, domain, build
-version and counts before staging an update. Database replacement happens on
-restart before any Word Wise database connection opens.
+Devices on RC1.3.0 or older first install the RC1.3.2 plugin through the normal Word Wise updater. After restart, RC1.3.2 offers the matching database synchronization and installs all three databases on the next restart.
 
-The previous plugin and dictionary databases are backed up. An interrupted
-database replacement is restored before retrying. `known_words.db`, reading
-progress and per-book settings are never package targets or backup inputs.
+The reviewed dictionary content is unchanged from RC1.3.1. The database package is re-versioned to `2026.07.1-rc1.3.2` so the release tag, plugin version, manifest and SQLite build metadata match exactly.
 
-## Upgrade path
-
-- From RC1.3.1 or later: one check downloads code and databases together.
-- From RC1.3.0 or an older code-only updater: update the RC1.3.1 plugin first,
-  restart, then accept the one-time matching database synchronization prompt.
-
-After the final restart, open **Word Wise → Diagnostics** and confirm that both
-the plugin version and database build show `2026.07.1-rc1.3.1`.
+`known_words.db`, reading progress and per-book settings are never package targets.
