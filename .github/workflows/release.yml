@@ -34,14 +34,14 @@ jobs:
           npx --yes --package=fengari-node-cli fengari tests/test_db.lua
           npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
 
-      - name: Build and verify code-only assets
+      - name: Build and verify code assets
         shell: bash
         run: |
           chmod +x tools/build_release.sh tools/verify_release.sh
           ./tools/build_release.sh
           ./tools/verify_release.sh
 
-      - name: Publish GitHub Release
+      - name: Create safe draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -54,5 +54,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "dist/wordwise.koplugin-v${version}.zip" \
             "dist/wordwise.koplugin-v${version}.zip.sha256" \
-            --generate-notes \
+            --notes-file RELEASE_NOTES.md \
+            --draft \
             "${prerelease[@]}"

@@ -19,6 +19,7 @@ mkdir -p "$plugin_dir" "$dist_dir"
 
 release_files=(
     _meta.lua
+    DATA_MAINTENANCE.md
     main.lua
     wordwise_db.lua
     known_words.lua

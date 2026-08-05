@@ -20,6 +20,7 @@ unzip -t "$archive" >/dev/null
 expected="$(
     printf '%s\n' \
         wordwise.koplugin/ \
+        wordwise.koplugin/DATA_MAINTENANCE.md \
         wordwise.koplugin/NOTICE.md \
         wordwise.koplugin/README.md \
         wordwise.koplugin/_meta.lua \
@@ -40,8 +41,8 @@ if [[ "$actual" != "$expected" ]]; then
 fi
 
 if unzip -Z1 "$archive" | grep -Eiq '(^|/)(databases?|wordwise)/|known_words\.db|\.s?qlite3?$|\.db$'; then
-    echo "Database or user-data path found in release" >&2
+    echo "Database or user-data path found in plugin release" >&2
     exit 1
 fi
 
-echo "Release verification: PASS"
+echo "Plugin release verification: PASS"

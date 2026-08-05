@@ -74,6 +74,12 @@ local function domain_label(domain)
     return DOMAIN_LABELS[domain] or DOMAIN_LABELS.general
 end
 
+local function bilingual_gloss(short_en, short_vi)
+    short_en = tostring(short_en or "")
+    if short_vi and short_vi ~= "" then return short_en .. " · " .. short_vi end
+    return short_en
+end
+
 local function add_layout_value(hash_a, hash_b, value)
     local text = tostring(value or "")
     for i = 1, #text do
@@ -213,6 +219,15 @@ function WordWise:setKnown(lemma, scope, known)
 end
 
 function WordWise:init()
+    local database_update_ok, database_update_result = true, nil
+    if WordWiseUpdater.applyPendingDataUpdate then
+        local call_ok, applied, result = pcall(WordWiseUpdater.applyPendingDataUpdate)
+        database_update_ok = call_ok and applied ~= false
+        database_update_result = call_ok and result or applied
+        if not database_update_ok then
+            logger.warn("Word Wise pending database update failed", tostring(database_update_result))
+        end
+    end
     ensure_dir(WW_DIR)
     ensure_dir(DB_DIR)
     self.hints = {}
@@ -256,6 +271,22 @@ function WordWise:init()
 
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
+    UIManager:nextTick(function()
+        if not database_update_ok then
+            UIManager:show(InfoMessage:new{
+                text = _("Word Wise kept the previous databases because the pending database update failed:")
+                    .. "\n" .. tostring(database_update_result),
+            })
+        elseif database_update_result then
+            UIManager:show(InfoMessage:new{
+                text = _("Word Wise code and databases are now synchronized at v")
+                    .. tostring(database_update_result) .. ".",
+                timeout = 4,
+            })
+        elseif WordWiseUpdater.maybeOfferDatabaseUpdate then
+            WordWiseUpdater.maybeOfferDatabaseUpdate()
+        end
+    end)
 end
 
 function WordWise:currentLineSpacing()
@@ -570,7 +601,7 @@ function WordWise:combinedBox(records, first, last)
 end
 
 function WordWise:makeHint(entry, surface, records, first, last, confidence)
-    local gloss = entry.short_en .. " · " .. entry.short_vi
+    local gloss = bilingual_gloss(entry.short_en, entry.short_vi)
     return {
         text = gloss, surface = surface, lemma = entry.lemma or entry.term,
         short_en = entry.short_en, short_vi = entry.short_vi,
@@ -797,15 +828,16 @@ function WordWise:showHintPopup(hint)
         title = title .. "  →  " .. hint.lemma
     end
     local lines = {
-        hint.short_en .. " · " .. hint.short_vi,
+        bilingual_gloss(hint.short_en, hint.short_vi),
         "",
         "Domain: " .. domain_label(self:getDomain()),
     }
     if hint.pos and hint.pos ~= "other" then lines[#lines + 1] = "Part of speech: " .. hint.pos end
     if hint.register_label then lines[#lines + 1] = "Register: " .. hint.register_label end
-    if hint.sense2_en and hint.sense2_vi then
+    if hint.sense2_en then
         lines[#lines + 1] = ""
-        lines[#lines + 1] = "Other possible sense: " .. hint.sense2_en .. " · " .. hint.sense2_vi
+        lines[#lines + 1] = "Other possible sense: "
+            .. bilingual_gloss(hint.sense2_en, hint.sense2_vi)
     end
     if hint.context and hint.context ~= "" then
         lines[#lines + 1] = ""
@@ -951,11 +983,17 @@ function WordWise:diagnosticsText()
         "Database build: " .. tostring(db:getMetadata("build_version") or "unknown"),
         "Entries: " .. tostring(db:getMetadata("entry_count") or "unknown"),
         "Phrases: " .. tostring(db:getMetadata("phrase_count") or "unknown"),
+        "Reviewed Vietnamese: " .. tostring(db:getMetadata("reviewed_vi_count")
+            or db:getMetadata("verified_vi_count") or "unknown"),
+        "English-only entries: " .. tostring(db:getMetadata("english_only_count") or "unknown"),
         "Phrase matcher: up to " .. tostring(MAX_PHRASE_WORDS) .. " words",
         "Hint level: " .. tostring(self:getHintLevel()),
         "Current line spacing: " .. tostring(self:currentLineSpacing()) .. "%",
         "Page hints: " .. tostring(#(self.hints or {})),
         "Update repository: " .. (WordWiseUpdater.getRepository() or "not configured"),
+        "OTA database bundle: " .. (WordWiseUpdater.getInstalledDatabaseBundleVersion
+            and (WordWiseUpdater.getInstalledDatabaseBundleVersion() or "not synchronized")
+            or "not available"),
     }
     if self:isPerformanceDiagnosticsEnabled() then
         local stats = self:getPerformanceStats()
