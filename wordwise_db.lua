@@ -10,7 +10,8 @@ FROM entries WHERE term = ?1 COLLATE NOCASE LIMIT 1;
 ]]
 local ALIAS_SQL = [[
 SELECT alias, term, case_sensitive FROM aliases
-WHERE alias = ?1 COLLATE NOCASE ORDER BY case_sensitive DESC LIMIT 4;
+WHERE alias = ?1 COLLATE NOCASE
+ORDER BY case_sensitive DESC, term COLLATE NOCASE;
 ]]
 local IRREGULAR_SQL = [[
 SELECT i.lemma
@@ -35,6 +36,10 @@ local NO_DEINFLECT = {
     morning = true, evening = true, passing = true, news = true,
     physics = true, economics = true, series = true, species = true,
 }
+
+local POS_NOUN_OR_VERB = { noun = true, verb = true }
+local POS_VERB = { verb = true }
+local POS_ADJECTIVE = { adjective = true }
 
 local function trim(s)
     if not s then return nil end
@@ -62,44 +67,65 @@ local function phrase_shape(surface)
 end
 
 local function regular_candidates(w)
-    if NO_DEINFLECT[w] then return { w } end
-    local out, seen = { w }, { [w] = true }
-    local function add(s)
+    if NO_DEINFLECT[w] then return {} end
+    local out, seen = {}, {}
+    local function add(s, allowed_pos)
         if s and #s >= 3 and not seen[s] then
             seen[s] = true
-            out[#out + 1] = s
+            out[#out + 1] = { term = s, allowed_pos = allowed_pos }
         end
     end
     local n = #w
-    if n >= 5 and w:sub(-3) == "ies" then add(w:sub(1, n - 3) .. "y") end
-    if n >= 4 and w:sub(-1) == "s" then add(w:sub(1, n - 1)) end
+    if n >= 5 and w:sub(-3) == "ies" then
+        add(w:sub(1, n - 3) .. "y", POS_NOUN_OR_VERB)
+    end
     if n >= 5 and (w:sub(-4) == "ches" or w:sub(-4) == "shes"
         or w:sub(-3) == "xes" or w:sub(-3) == "zes"
         or w:sub(-3) == "ses" or w:sub(-3) == "oes") then
-        add(w:sub(1, n - 2))
+        add(w:sub(1, n - 2), POS_NOUN_OR_VERB)
+    end
+    if n >= 4 and w:sub(-1) == "s" then
+        add(w:sub(1, n - 1), POS_NOUN_OR_VERB)
     end
     if n >= 5 and w:sub(-2) == "ly" then
-        if w:sub(-3) == "ily" then add(w:sub(1, n - 3) .. "y") end
-        add(w:sub(1, n - 2))
+        if w:sub(-3) == "ily" then
+            add(w:sub(1, n - 3) .. "y", POS_ADJECTIVE)
+        end
+        add(w:sub(1, n - 2), POS_ADJECTIVE)
     end
-    if n >= 5 and w:sub(-3) == "ied" then add(w:sub(1, n - 3) .. "y") end
+    if n >= 5 and w:sub(-3) == "ied" then
+        add(w:sub(1, n - 3) .. "y", POS_VERB)
+    end
     if n >= 5 and w:sub(-2) == "ed" then
         local stem = w:sub(1, n - 2)
         local last = stem:sub(-1)
         local prev = stem:sub(-2, -2)
-        if last == prev and last:match("[bdgmnprt]") then add(stem:sub(1, -2)) end
-        add(stem)                  -- passed -> pass, walked -> walk
-        add(w:sub(1, n - 1))       -- loved -> love
+        if last == prev and last:match("[bdgmnprt]") then
+            add(stem:sub(1, -2), POS_VERB)
+        end
+        add(stem, POS_VERB)                  -- passed -> pass, walked -> walk
+        add(w:sub(1, n - 1), POS_VERB)       -- loved -> love
     end
     if n >= 6 and w:sub(-3) == "ing" then
         local stem = w:sub(1, n - 3)
         local last = stem:sub(-1)
         local prev = stem:sub(-2, -2)
-        if last == prev and last:match("[bdgmnprt]") then add(stem:sub(1, -2)) end
-        add(stem)                  -- hurrying -> hurry
-        add(stem .. "e")          -- making -> make
+        if last == prev and last:match("[bdgmnprt]") then
+            add(stem:sub(1, -2), POS_VERB)
+        end
+        add(stem, POS_VERB)                  -- hurrying -> hurry
+        add(stem .. "e", POS_VERB)          -- making -> make
     end
     return out
+end
+
+local function pos_matches(entry, allowed_pos)
+    if not entry or not allowed_pos then return false end
+    local pos = normalize(entry.pos)
+    for expected in pairs(allowed_pos) do
+        if pos == expected or pos:find(expected, 1, true) then return true end
+    end
+    return false
 end
 
 local function row_to_entry(row)
@@ -217,8 +243,8 @@ function WordWiseDB:_entry(term)
     return result
 end
 
-function WordWiseDB:_alias(surface)
-    local target
+function WordWiseDB:_alias(surface, case_sensitive_only)
+    local target, ambiguous
     local ok, err = pcall(function()
         self.alias_stmt:reset():clearbind()
         self.alias_stmt:bind(surface)
@@ -227,9 +253,16 @@ function WordWiseDB:_alias(surface)
             if not row then break end
             local stored_alias = row[1]
             local case_sensitive = tonumber(row[3]) == 1
-            if not case_sensitive or surface == stored_alias then
-                target = row[2]
-                break
+            local eligible = case_sensitive_only
+                and case_sensitive and surface == stored_alias
+                or not case_sensitive_only
+                    and (not case_sensitive or surface == stored_alias)
+            if eligible then
+                if target and target:lower() ~= tostring(row[2]):lower() then
+                    ambiguous = true
+                else
+                    target = row[2]
+                end
             end
         end
         self.alias_stmt:clearbind():reset()
@@ -238,7 +271,10 @@ function WordWiseDB:_alias(surface)
         logger.warn("WordWiseDB: alias lookup failed", surface, tostring(err))
         error(err)
     end
-    return target
+    -- Multiple meanings for the same alias cannot be resolved by row order.
+    -- Fail closed and require the data pack to provide one canonical target.
+    if ambiguous then return nil, true end
+    return target, false
 end
 
 function WordWiseDB:_irregular(surface)
@@ -263,10 +299,19 @@ function WordWiseDB:lookupExact(surface)
     local cache_key = "e:" .. surface
     local cached = self.cache[cache_key]
     if cached ~= nil then return cached or nil end
-    local result = self:_entry(norm)
-    if not result then
-        local target = self:_alias(surface)
-        if target then result = self:_entry(target) end
+    local result
+    -- A deliberately case-sensitive acronym such as BOP or ROE must beat the
+    -- unrelated lowercase exact word (bop/roe).  Ordinary aliases still stay
+    -- behind exact lookup, preserving the canonical exact-entry rule.
+    local target, ambiguous = self:_alias(surface, true)
+    if target then
+        result = self:_entry(target)
+    elseif not ambiguous then
+        result = self:_entry(norm)
+        if not result then
+            target, ambiguous = self:_alias(surface, false)
+            if target then result = self:_entry(target) end
+        end
     end
     if result then result.surface = surface end
     self:_cache_put(cache_key, result)
@@ -286,10 +331,20 @@ function WordWiseDB:lookupWord(surface)
         if irregular then result = self:_entry(irregular) end
     end
     if not result then
+        local matches, matched_terms = {}, {}
         for _, candidate in ipairs(regular_candidates(norm)) do
-            result = self:_entry(candidate)
-            if result then break end
+            local entry = self:_entry(candidate.term)
+            if entry and pos_matches(entry, candidate.allowed_pos)
+                and not matched_terms[entry.term:lower()] then
+                matched_terms[entry.term:lower()] = true
+                matches[#matches + 1] = entry
+            end
         end
+        -- Orthographic deinflection can produce two real words (for example
+        -- singing -> sing/singe).  Guessing in that situation is exactly how
+        -- gaming was previously mapped to the unrelated noun "gam".  Fail
+        -- closed unless the database leaves one unambiguous, POS-valid lemma.
+        if #matches == 1 then result = matches[1] end
     end
     if result then result.surface = surface end
     self:_cache_put(cache_key, result)
