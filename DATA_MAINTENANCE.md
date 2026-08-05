@@ -83,6 +83,13 @@ The rebuild:
 10. runs integrity/foreign-key/schema checks, `ANALYZE`, `VACUUM`, closes and
     reopens every output to detect a stale SQLite journal or rollback.
 
+## Runtime packaging compatibility
+
+`DATA_MAINTENANCE.md` is repository documentation only. It must not be added to
+the runtime plugin ZIP: RC1.3.0 and older deployed updaters use an immutable
+fixed file allow-list. `tools/build_release.sh` and `tools/verify_release.sh`
+therefore deliberately preserve the legacy runtime file set.
+
 ## Package
 
 ```bash

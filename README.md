@@ -5,7 +5,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.1`.
+Current plugin version: `2026.07.1-rc1.3.2`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -32,6 +32,19 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.3.2 Bootstrap Compatibility Hotfix
+
+RC1.3.1 accidentally placed the repository-only `DATA_MAINTENANCE.md`
+document inside the runtime plugin ZIP. RC1.3.0 and older updaters correctly
+rejected that unknown path because their archive allow-list is fixed. RC1.3.2
+restores the exact legacy plugin ZIP file set. The document remains available
+in this source repository but is never installed on the reader.
+
+After the RC1.3.2 code update and restart, the Full OTA updater downloads the
+matching RC1.3.2 database package. Its reviewed dictionary content is unchanged
+from RC1.3.1; only release/build metadata is advanced so the tag, plugin,
+manifest and SQLite databases match exactly.
 
 ## RC1.3.1 Data Integrity Emergency Fix
 
@@ -200,7 +213,6 @@ The ZIP has one top-level directory:
 ```text
 wordwise.koplugin/
 ├── _meta.lua
-├── DATA_MAINTENANCE.md
 ├── main.lua
 ├── wordwise_db.lua
 ├── known_words.lua

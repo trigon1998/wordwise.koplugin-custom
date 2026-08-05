@@ -271,11 +271,11 @@ assert_equal(scheduled_computes, 1,
     "rotation must invalidate a computation scheduled with stale coordinates")
 
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.0"),
-    "diagnostics must expose the RC1.3.1 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.2"),
+    "diagnostics must expose the RC1.3.2 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.3.1 main behavior tests: PASS")
+print("RC1.3.2 main behavior tests: PASS")
