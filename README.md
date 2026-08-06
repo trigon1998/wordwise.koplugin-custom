@@ -5,7 +5,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.2`.
+Current plugin version: `2026.07.1-rc1.3.5`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -32,6 +32,43 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.3.5 Upstream-Style Hint Renderer OTA Test
+
+RC1.3.5 abandons the RC1.3.4 target-glyph measurement experiment and returns
+to the simpler renderer strategy used by `asxelot/wordwise.koplugin`.
+
+The plugin now reserves a stable 180% interline band, uses font-level gloss
+metrics, draws a horizontal rule with a fixed downward caret, centers the
+complete hint unit in the raised leading, and clamps long glosses to the real
+text column. Placement no longer has a target-measurement failure path.
+
+Dictionary rows remain unchanged from RC1.3.4; only matching database build
+metadata advances for the four-asset Full OTA test.
+
+## RC1.3.4 Hint Vertical Alignment Round 2 OTA Test
+
+RC1.3.4 removes the RC1.3.3 line-spacing estimate that remained too high on
+the iReader. It measures the target word with the active book face, centers
+the measured glyph height inside the CRE box, and anchors the gloss directly
+above that estimate.
+
+Compact or top-screen hints fail closed when safe placement is impossible.
+Dictionary rows remain unchanged from RC1.3.3; only matching database build
+metadata advances for the four-asset Full OTA test. PR #5 remains draft until
+the same page is validated on-device.
+
+## RC1.3.3 Hint Vertical Alignment OTA Test
+
+RC1.3.3 moves inline glosses down toward the word they explain when raised
+line spacing provides sufficient room. It never moves a compact-line gloss
+upward relative to RC1.3.2, shortens the caret to the available gap, and hides
+a hint when it cannot fit safely at the top of the screen.
+
+The dictionary rows are unchanged from RC1.3.2. The matching database package
+advances build metadata only so the complete four-asset OTA path can be tested.
+The release remains a prerelease and PR #5 remains unmerged until on-device
+validation is complete.
 
 ## RC1.3.2 Bootstrap Compatibility Hotfix
 

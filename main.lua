@@ -44,7 +44,7 @@ local MAX_GLOSS_FONT_SIZE = 18
 local MAX_HINTS_PER_PAGE = 10
 local WORD_WALK_GUARD = 4000
 local PAGE_CACHE_LIMIT = 3
-local DEFAULT_AUTO_SPACING = 148
+local DEFAULT_AUTO_SPACING = 180
 local DOMAIN_LABELS = { general = "General", economics = "Economics", physics = "Physics" }
 local DEFAULT_PHRASE_LENGTHS = { 5, 4, 3, 2 }
 local LAYOUT_HASH_MOD_A = 2147483647
@@ -173,6 +173,7 @@ function WordWise:buildGlossFace()
     local ok, face = pcall(function() return Font:getFace(name, self:getGlossFontSize()) end)
     if not ok or not face then face = Font:getFace("infofont", self:getGlossFontSize()) end
     self.gloss_face = face
+    self._gloss_metrics = nil
     self.gloss_face_book_font = choice == "same_as_book" and tostring(name) or nil
 end
 
@@ -328,33 +329,19 @@ function WordWise:restoreOriginalSpacing()
     if ds and ds.delSetting then pcall(function() ds:delSetting("wordwise_original_line_spacing") end) end
 end
 
-function WordWise:considerAutoSpacing(hint_count)
+function WordWise:considerAutoSpacing(_hint_count)
     if not self:isAutoSpacingEnabled() or not self:isEnabled() then return end
-    local target
-    if hint_count <= 3 then target = 132
-    elseif hint_count <= 7 then target = 148
-    else target = 165 end
+    local target = DEFAULT_AUTO_SPACING
+    if math.abs(self:currentLineSpacing() - target) <= 2 then return end
 
-    if self.spacing_cooldown > 0 then
-        self.spacing_cooldown = self.spacing_cooldown - 1
-        return
-    end
-    if math.abs(self:currentLineSpacing() - target) <= 2 then
-        self.spacing_candidate, self.spacing_candidate_count = nil, 0
-        return
-    end
-    if self.spacing_candidate == target then
-        self.spacing_candidate_count = self.spacing_candidate_count + 1
-    else
-        self.spacing_candidate, self.spacing_candidate_count = target, 1
-    end
-    if self.spacing_candidate_count >= 3 then
-        self.spacing_candidate, self.spacing_candidate_count = nil, 0
-        self.spacing_cooldown = 5
-        UIManager:nextTick(function()
-            if self:isEnabled() and self:isAutoSpacingEnabled() then self:setLineSpacingValue(target) end
-        end)
-    end
+    -- Option A: reserve a stable, generous hint band instead of estimating a
+    -- different spacing from page hint count. The upstream implementation uses
+    -- 180%, which is what gives its gloss + rule + caret unit enough room.
+    UIManager:nextTick(function()
+        if self:isEnabled() and self:isAutoSpacingEnabled() then
+            self:setLineSpacingValue(target)
+        end
+    end)
 end
 
 function WordWise:handleFailure(reason)
@@ -632,6 +619,7 @@ end
 
 function WordWise:computePageHints()
     self.hints = {}
+    self.text_col = nil
     if not (self:isEnabled() and self:isSupportedDocument()) then return end
     local started
     if self:isPerformanceDiagnosticsEnabled() then
@@ -643,6 +631,22 @@ function WordWise:computePageHints()
     if not db then error(err or "database unavailable") end
 
     local records, page = self:collectVisibleWords()
+
+    -- Track the real rendered text column from visible CRE word boxes. The
+    -- upstream renderer uses this to stop long glosses drifting into margins.
+    local text_left, text_right
+    for _, record in ipairs(records or {}) do
+        local box = record.box
+        if box and (tonumber(box.w) or 0) > 0 then
+            local left = tonumber(box.x) or 0
+            local right = left + (tonumber(box.w) or 0)
+            if not text_left or left < text_left then text_left = left end
+            if not text_right or right > text_right then text_right = right end
+        end
+    end
+    if text_left and text_right and text_right > text_left then
+        self.text_col = { left = text_left, right = text_right }
+    end
     if self:getGlossFontName() == "same_as_book" then
         local configurable = self.ui and self.ui.font and self.ui.font.configurable
         local book_font = tostring(configurable and configurable.font_face or "infofont")
@@ -743,83 +747,205 @@ function WordWise:safeComputePageHints()
 end
 
 local GLOSS_HGAP = 8
-local CARET_DEPTH = 6
+local CARET_DEPTH = 7
+local GLOSS_RULE_GAP = 1
 
-local function drawWordMarker(bb, x0, x1, cx, ytop, color)
+-- Kindle-style marker learned from the upstream Word Wise renderer: a thin
+-- rule interrupted by two diagonals which meet in a downward-pointing tip.
+local function drawWordMarker(bb, x0, x1, cx, ytop, color, with_rule)
     local half = CARET_DEPTH
     if cx - half < x0 then cx = x0 + half end
     if cx + half > x1 then cx = x1 - half end
-    if cx - half > x0 then bb:paintRect(x0, ytop, (cx - half) - x0, 1, color) end
-    if x1 > cx + half then bb:paintRect(cx + half, ytop, x1 - (cx + half), 1, color) end
+    if with_rule then
+        if cx - half > x0 then
+            bb:paintRect(x0, ytop, (cx - half) - x0, 1, color)
+        end
+        if x1 > cx + half then
+            bb:paintRect(cx + half, ytop, x1 - (cx + half), 1, color)
+        end
+    end
     for i = 0, half do
         bb:setPixel(cx - half + i, ytop + i, color)
         bb:setPixel(cx + half - i, ytop + i, color)
     end
 end
 
+-- Use one ascent/descent pair for the entire gloss face. Per-string ink
+-- extents make hints with descenders sit differently from hints without them.
+function WordWise:getGlossMetrics()
+    local face = self.gloss_face
+    local metrics = self._gloss_metrics
+    if metrics and metrics.face == face then return metrics end
+
+    local ascent, descent
+    local ok, height, ascender = pcall(function()
+        return face.ftsize:getHeightAndAscender()
+    end)
+    if ok and height and ascender then
+        ascent = math.floor(ascender + 0.5)
+        descent = math.ceil(height - ascender)
+    else
+        local measured = RenderText:sizeUtf8Text(
+            0, 10000, face, "Agjpqy", true, false)
+        ascent = tonumber(measured.y_top) or 0
+        descent = tonumber(measured.y_bottom) or 0
+    end
+    if descent < 0 then descent = 0 end
+
+    metrics = { face = face, ascent = ascent, descent = descent }
+    self._gloss_metrics = metrics
+    return metrics
+end
+
+-- Option A / upstream geometry: the blank leading band is already encoded in
+-- the CRE line box. Center the whole gloss + rule + caret unit in that band and
+-- clamp only to keep the caret above the word. No target-font measurement and
+-- no nil placement path.
+function WordWise:hintVerticalPlacement(box, metrics, spacing)
+    spacing = math.max(100, tonumber(spacing) or 100)
+    local box_y = tonumber(box and box.y) or 0
+    local box_h = math.max(1, tonumber(box and box.h) or 1)
+    local ascent = tonumber(metrics and metrics.ascent) or 0
+    local descent = math.max(0, tonumber(metrics and metrics.descent) or 0)
+
+    local leading = box_h * (1 - 100 / spacing)
+    local word_top = box_y + math.floor(leading / 2)
+    local baseline = box_y + (ascent - descent) / 2
+    baseline = math.floor(
+        math.min(baseline, word_top - 1 - descent) + 0.5)
+    local marker_y = math.min(
+        baseline + descent + GLOSS_RULE_GAP,
+        word_top - CARET_DEPTH - 1)
+
+    return {
+        baseline = baseline,
+        marker_y = marker_y,
+        caret_depth = CARET_DEPTH,
+        word_top = word_top,
+        top = baseline - ascent,
+        bottom = baseline + descent,
+    }
+end
+
 function WordWise:paintHints(bb, x, y)
     if not (self:isEnabled() and self.hints and #self.hints > 0) then return end
+
     local screen_w = bb:getWidth()
-    local color = Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK
+    local color = Blitbuffer.COLOR_BLACK
     local spacing = self:currentLineSpacing()
+    local metrics = self:getGlossMetrics()
     local items = {}
+
+    local left_bound, right_bound = 2, screen_w - 2
+    if self.text_col then
+        left_bound = self.text_col.left
+        right_bound = self.text_col.right
+    else
+        local ok, margins = pcall(function()
+            return self.ui.document:getPageMargins()
+        end)
+        if ok and margins and margins.left and margins.right then
+            left_bound = margins.left
+            right_bound = screen_w - margins.right
+        end
+    end
+
+    self.render_stats = {
+        matched = #(self.hints or {}),
+        placed = 0,
+        hidden = 0,
+        collisions = 0,
+        top_hidden = 0,
+    }
+
     for _, hint in ipairs(self.hints) do
         hint.hitbox = nil
-        local size = RenderText:sizeUtf8Text(0, screen_w, self.gloss_face, hint.text, true, false)
+        local size = RenderText:sizeUtf8Text(
+            0, screen_w, self.gloss_face, hint.text, true, false)
         local width = size.x
-        local tx = math.floor(hint.box.x + (hint.box.w - width) / 2 + 0.5)
-        local max_x = screen_w - width - 2
+        local tx = math.floor(
+            hint.box.x + (hint.box.w - width) / 2 + 0.5)
+        local max_x = right_bound - width
         if tx > max_x then tx = max_x end
-        if tx < 2 then tx = 2 end
-        local leading = hint.box.h * (1 - 100 / math.max(100, spacing))
-        local word_top = hint.box.y + math.floor(leading / 2)
-        local baseline = hint.box.y + (size.y_top - size.y_bottom) / 2
-        baseline = math.floor(math.min(baseline, word_top - 1 - size.y_bottom) + 0.5)
-        local marker_y = math.min(baseline + size.y_bottom + 1, word_top - CARET_DEPTH - 1)
+        if tx < left_bound then tx = left_bound end
+
+        local vertical = self:hintVerticalPlacement(
+            hint.box, metrics, spacing)
         items[#items + 1] = {
-            hint = hint, x0 = tx, x1 = tx + width, band = hint.box.y,
-            baseline = baseline, marker_y = marker_y,
-            word_cx = math.floor(hint.box.x + hint.box.w / 2 + 0.5),
-            top = baseline - size.y_top, bottom = baseline + size.y_bottom,
+            hint = hint,
+            x0 = tx,
+            x1 = tx + width,
+            band = hint.box.y,
+            baseline = vertical.baseline,
+            marker_y = vertical.marker_y,
+            caret_depth = vertical.caret_depth,
+            word_cx = math.floor(
+                hint.box.x + hint.box.w / 2 + 0.5),
+            top = vertical.top,
+            bottom = vertical.bottom,
         }
     end
 
     table.sort(items, function(a, b)
         if a.band ~= b.band then return a.band < b.band end
-        if a.hint.phrase_len ~= b.hint.phrase_len then return a.hint.phrase_len > b.hint.phrase_len end
-        if a.hint.difficulty ~= b.hint.difficulty then return a.hint.difficulty < b.hint.difficulty end
-        if a.hint.confidence ~= b.hint.confidence then return a.hint.confidence > b.hint.confidence end
+        if a.hint.phrase_len ~= b.hint.phrase_len then
+            return a.hint.phrase_len > b.hint.phrase_len
+        end
+        if a.hint.difficulty ~= b.hint.difficulty then
+            return a.hint.difficulty < b.hint.difficulty
+        end
+        if a.hint.confidence ~= b.hint.confidence then
+            return a.hint.confidence > b.hint.confidence
+        end
         return a.x0 < b.x0
     end)
 
     local placed = {}
     for _, item in ipairs(items) do
-        if item.baseline > 2 then
+        if item.baseline > 2 and item.marker_y >= 0 then
             local list = placed[item.band] or {}
             placed[item.band] = list
             local fits = true
             for _, interval in ipairs(list) do
-                if item.x0 < interval[2] + GLOSS_HGAP and item.x1 + GLOSS_HGAP > interval[1] then
+                if item.x0 < interval[2] + GLOSS_HGAP
+                        and item.x1 + GLOSS_HGAP > interval[1] then
                     fits = false
                     break
                 end
             end
             if fits then
                 list[#list + 1] = { item.x0, item.x1 }
-                RenderText:renderUtf8Text(bb, item.x0, item.baseline, self.gloss_face,
+                RenderText:renderUtf8Text(
+                    bb, item.x0, item.baseline, self.gloss_face,
                     item.hint.text, true, false, color)
-                drawWordMarker(bb, item.x0, item.x1, item.word_cx, item.marker_y, color)
+                drawWordMarker(
+                    bb, item.x0, item.x1, item.word_cx,
+                    item.marker_y, color, true)
                 item.hint.hitbox = {
                     x = math.min(item.x0, item.hint.box.x) - 4,
                     y = math.min(item.top, item.hint.box.y) - 4,
-                    w = math.max(item.x1, item.hint.box.x + item.hint.box.w)
+                    w = math.max(item.x1,
+                        item.hint.box.x + item.hint.box.w)
                         - math.min(item.x0, item.hint.box.x) + 8,
-                    h = math.max(item.bottom, item.hint.box.y + item.hint.box.h)
+                    h = math.max(
+                        item.marker_y + item.caret_depth,
+                        item.hint.box.y + item.hint.box.h)
                         - math.min(item.top, item.hint.box.y) + 8,
                 }
+                self.render_stats.placed =
+                    self.render_stats.placed + 1
+            else
+                self.render_stats.collisions =
+                    self.render_stats.collisions + 1
             end
+        else
+            self.render_stats.top_hidden =
+                self.render_stats.top_hidden + 1
         end
     end
+
+    self.render_stats.hidden = math.max(
+        0, self.render_stats.matched - self.render_stats.placed)
 end
 
 function WordWise:showHintPopup(hint)
@@ -990,6 +1116,13 @@ function WordWise:diagnosticsText()
         "Hint level: " .. tostring(self:getHintLevel()),
         "Current line spacing: " .. tostring(self:currentLineSpacing()) .. "%",
         "Page hints: " .. tostring(#(self.hints or {})),
+        "Hint renderer: upstream-style · 180% target",
+        "Hint render: " .. string.format(
+            "%d matched · %d placed · %d hidden",
+            (self.render_stats and self.render_stats.matched)
+                or #(self.hints or {}),
+            (self.render_stats and self.render_stats.placed) or 0,
+            (self.render_stats and self.render_stats.hidden) or 0),
         "Update repository: " .. (WordWiseUpdater.getRepository() or "not configured"),
         "OTA database bundle: " .. (WordWiseUpdater.getInstalledDatabaseBundleVersion
             and (WordWiseUpdater.getInstalledDatabaseBundleVersion() or "not synchronized")
