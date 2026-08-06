@@ -743,10 +743,45 @@ function WordWise:safeComputePageHints()
 end
 
 local GLOSS_HGAP = 8
+local GLOSS_WORD_GAP = 3
+local GLOSS_SCREEN_TOP_MARGIN = 2
 local CARET_DEPTH = 6
 
-local function drawWordMarker(bb, x0, x1, cx, ytop, color)
-    local half = CARET_DEPTH
+-- Position a gloss from the actual top edge of the target word area.
+--
+-- The previous renderer centered the gloss near box.y. With large book fonts
+-- and raised line spacing, that could leave the gloss visually attached to the
+-- preceding line instead of the word it explains. The anchored baseline below
+-- is never higher than the previous centered baseline: it only moves the gloss
+-- down when the interline gap has room.
+function WordWise:hintVerticalPlacement(box, size, spacing)
+    spacing = math.max(100, tonumber(spacing) or 100)
+    local leading = box.h * (1 - 100 / spacing)
+    local word_top = box.y + math.floor(leading / 2)
+    local centered_baseline = box.y + (size.y_top - size.y_bottom) / 2
+    local anchored_baseline = word_top - GLOSS_WORD_GAP - size.y_bottom
+    local maximum_baseline = word_top - 1 - size.y_bottom
+    local baseline = math.floor(
+        math.min(math.max(centered_baseline, anchored_baseline), maximum_baseline) + 0.5)
+    local top = baseline - size.y_top
+    if top < GLOSS_SCREEN_TOP_MARGIN then return nil end
+
+    local bottom = baseline + size.y_bottom
+    local marker_y = bottom + 1
+    local caret_depth = math.max(0, math.min(CARET_DEPTH, word_top - marker_y))
+    return {
+        baseline = baseline,
+        marker_y = marker_y,
+        caret_depth = caret_depth,
+        word_top = word_top,
+        top = top,
+        bottom = bottom,
+    }
+end
+
+local function drawWordMarker(bb, x0, x1, cx, ytop, color, depth)
+    local half = tonumber(depth) or CARET_DEPTH
+    if half <= 0 then return end
     if cx - half < x0 then cx = x0 + half end
     if cx + half > x1 then cx = x1 - half end
     if cx - half > x0 then bb:paintRect(x0, ytop, (cx - half) - x0, 1, color) end
@@ -771,17 +806,16 @@ function WordWise:paintHints(bb, x, y)
         local max_x = screen_w - width - 2
         if tx > max_x then tx = max_x end
         if tx < 2 then tx = 2 end
-        local leading = hint.box.h * (1 - 100 / math.max(100, spacing))
-        local word_top = hint.box.y + math.floor(leading / 2)
-        local baseline = hint.box.y + (size.y_top - size.y_bottom) / 2
-        baseline = math.floor(math.min(baseline, word_top - 1 - size.y_bottom) + 0.5)
-        local marker_y = math.min(baseline + size.y_bottom + 1, word_top - CARET_DEPTH - 1)
-        items[#items + 1] = {
-            hint = hint, x0 = tx, x1 = tx + width, band = hint.box.y,
-            baseline = baseline, marker_y = marker_y,
-            word_cx = math.floor(hint.box.x + hint.box.w / 2 + 0.5),
-            top = baseline - size.y_top, bottom = baseline + size.y_bottom,
-        }
+        local vertical = self:hintVerticalPlacement(hint.box, size, spacing)
+        if vertical then
+            items[#items + 1] = {
+                hint = hint, x0 = tx, x1 = tx + width, band = hint.box.y,
+                baseline = vertical.baseline, marker_y = vertical.marker_y,
+                caret_depth = vertical.caret_depth,
+                word_cx = math.floor(hint.box.x + hint.box.w / 2 + 0.5),
+                top = vertical.top, bottom = vertical.bottom,
+            }
+        end
     end
 
     table.sort(items, function(a, b)
@@ -808,7 +842,8 @@ function WordWise:paintHints(bb, x, y)
                 list[#list + 1] = { item.x0, item.x1 }
                 RenderText:renderUtf8Text(bb, item.x0, item.baseline, self.gloss_face,
                     item.hint.text, true, false, color)
-                drawWordMarker(bb, item.x0, item.x1, item.word_cx, item.marker_y, color)
+                drawWordMarker(bb, item.x0, item.x1, item.word_cx, item.marker_y,
+                    color, item.caret_depth)
                 item.hint.hitbox = {
                     x = math.min(item.x0, item.hint.box.x) - 4,
                     y = math.min(item.top, item.hint.box.y) - 4,

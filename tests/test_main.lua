@@ -106,6 +106,27 @@ layout.ui.view.dimen.w = 200
 assert(layout:pageLayoutSignature(records) ~= signature,
     "viewport/orientation changes must invalidate the layout signature")
 
+local tall_line_box = { x = 10, y = 100, w = 40, h = 80 }
+local gloss_size = { x = 60, y_top = 8, y_bottom = 2 }
+local placement = layout:hintVerticalPlacement(tall_line_box, gloss_size, 148)
+assert(placement, "a normal line must have room for a gloss")
+assert_equal(placement.word_top, 112,
+    "word top must account for the raised line spacing")
+assert_equal(placement.baseline, 107,
+    "a tall line must anchor the gloss closer to the target word")
+assert_equal(placement.bottom, 109,
+    "the gloss bottom must stay three pixels above the word")
+assert_equal(placement.caret_depth, 2,
+    "the caret must shrink to the safe vertical room instead of overlapping text")
+
+local compact_line_box = { x = 10, y = 100, w = 40, h = 20 }
+local compact = layout:hintVerticalPlacement(compact_line_box, gloss_size, 148)
+assert_equal(compact.baseline, 100,
+    "the hotfix must never move a compact-line gloss upward")
+assert_equal(layout:hintVerticalPlacement(
+    { x = 10, y = 0, w = 40, h = 12 }, gloss_size, 100), nil,
+    "a gloss without safe top-screen space must be hidden")
+
 local opened
 local tap = instance({
     hints = {
