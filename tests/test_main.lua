@@ -106,26 +106,36 @@ layout.ui.view.dimen.w = 200
 assert(layout:pageLayoutSignature(records) ~= signature,
     "viewport/orientation changes must invalidate the layout signature")
 
-local tall_line_box = { x = 10, y = 100, w = 40, h = 80 }
+local tall_line_box = { x = 10, y = 100, w = 40, h = 72 }
 local gloss_size = { x = 60, y_top = 8, y_bottom = 2 }
-local placement = layout:hintVerticalPlacement(tall_line_box, gloss_size, 148)
+local target_size = { x = 40, y_top = 28, y_bottom = 7 }
+local placement = layout:hintVerticalPlacement(
+    tall_line_box, gloss_size, target_size)
 assert(placement, "a normal line must have room for a gloss")
-assert_equal(placement.word_top, 112,
-    "word top must account for the raised line spacing")
-assert_equal(placement.baseline, 107,
-    "a tall line must anchor the gloss closer to the target word")
-assert_equal(placement.bottom, 109,
-    "the gloss bottom must stay three pixels above the word")
+assert_equal(placement.target_top, 119,
+    "target glyph metrics must be centered inside the CRE box")
+assert_equal(placement.baseline, 114,
+    "the gloss baseline must be anchored from the target glyph top")
+assert_equal(placement.bottom, 116,
+    "the gloss bottom must remain three pixels above the target glyph")
+assert_equal(placement.target_top - placement.bottom, 3,
+    "the visual word gap must not depend on line-spacing percentage")
 assert_equal(placement.caret_depth, 2,
     "the caret must shrink to the safe vertical room instead of overlapping text")
 
 local compact_line_box = { x = 10, y = 100, w = 40, h = 20 }
-local compact = layout:hintVerticalPlacement(compact_line_box, gloss_size, 148)
-assert_equal(compact.baseline, 100,
-    "the hotfix must never move a compact-line gloss upward")
+local compact_target = { x = 40, y_top = 14, y_bottom = 4 }
 assert_equal(layout:hintVerticalPlacement(
-    { x = 10, y = 0, w = 40, h = 12 }, gloss_size, 100), nil,
+    compact_line_box, gloss_size, compact_target), nil,
+    "a compact line must hide the hint rather than move it upward or touch the word")
+
+assert_equal(layout:hintVerticalPlacement(
+    { x = 10, y = 0, w = 40, h = 12 },
+    gloss_size, { x = 20, y_top = 8, y_bottom = 2 }), nil,
     "a gloss without safe top-screen space must be hidden")
+assert_equal(layout:hintVerticalPlacement(
+    tall_line_box, gloss_size, nil), nil,
+    "target measurement failure must fail closed instead of using a stale estimate")
 
 local opened
 local tap = instance({
@@ -292,11 +302,11 @@ assert_equal(scheduled_computes, 1,
     "rotation must invalidate a computation scheduled with stale coordinates")
 
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.3"),
-    "diagnostics must expose the RC1.3.3 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.4"),
+    "diagnostics must expose the RC1.3.4 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.3.3 main behavior tests: PASS")
+print("RC1.3.4 main behavior tests: PASS")

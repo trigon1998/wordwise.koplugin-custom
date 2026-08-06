@@ -747,33 +747,47 @@ local GLOSS_WORD_GAP = 3
 local GLOSS_SCREEN_TOP_MARGIN = 2
 local CARET_DEPTH = 6
 
--- Position a gloss from the actual top edge of the target word area.
+-- Position a gloss from an estimate of the target glyph's real top edge.
 --
--- The previous renderer centered the gloss near box.y. With large book fonts
--- and raised line spacing, that could leave the gloss visually attached to the
--- preceding line instead of the word it explains. The anchored baseline below
--- is never higher than the previous centered baseline: it only moves the gloss
--- down when the interline gap has room.
-function WordWise:hintVerticalPlacement(box, size, spacing)
-    spacing = math.max(100, tonumber(spacing) or 100)
-    local leading = box.h * (1 - 100 / spacing)
-    local word_top = box.y + math.floor(leading / 2)
-    local centered_baseline = box.y + (size.y_top - size.y_bottom) / 2
-    local anchored_baseline = word_top - GLOSS_WORD_GAP - size.y_bottom
-    local maximum_baseline = word_top - 1 - size.y_bottom
-    local baseline = math.floor(
-        math.min(math.max(centered_baseline, anchored_baseline), maximum_baseline) + 0.5)
-    local top = baseline - size.y_top
+-- CRE exposes a coarse word/line box, not the glyph pixel boundary. RC1.3.3
+-- tried to reconstruct that boundary from line-spacing percentage and box.h;
+-- on the target reader that estimate remained too high. This round measures
+-- the target surface with the active book face, centers those glyph metrics
+-- inside the CRE box and anchors the gloss directly above that estimate.
+--
+-- The old centered baseline remains a lower bound. If a compact line cannot
+-- fit the gloss without moving it upward or touching the target, the hint is
+-- hidden instead of being forced into the preceding line.
+function WordWise:hintVerticalPlacement(box, gloss_size, target_size)
+    if not (box and gloss_size and target_size) then return nil end
+    local box_h = math.max(1, tonumber(box.h) or 1)
+    local target_height = math.max(1,
+        (tonumber(target_size.y_top) or 0) + (tonumber(target_size.y_bottom) or 0))
+    target_height = math.min(box_h, target_height)
+
+    local target_top = math.floor(
+        (tonumber(box.y) or 0) + (box_h - target_height) / 2 + 0.5)
+    target_top = math.max(tonumber(box.y) or 0,
+        math.min((tonumber(box.y) or 0) + box_h - 1, target_top))
+
+    local direct_baseline = target_top - GLOSS_WORD_GAP
+        - (tonumber(gloss_size.y_bottom) or 0)
+    local centered_baseline = (tonumber(box.y) or 0)
+        + ((tonumber(gloss_size.y_top) or 0)
+            - (tonumber(gloss_size.y_bottom) or 0)) / 2
+    local baseline = math.floor(math.max(centered_baseline, direct_baseline) + 0.5)
+    local top = baseline - (tonumber(gloss_size.y_top) or 0)
     if top < GLOSS_SCREEN_TOP_MARGIN then return nil end
 
-    local bottom = baseline + size.y_bottom
+    local bottom = baseline + (tonumber(gloss_size.y_bottom) or 0)
+    if bottom > target_top - 1 then return nil end
     local marker_y = bottom + 1
-    local caret_depth = math.max(0, math.min(CARET_DEPTH, word_top - marker_y))
+    local caret_depth = math.max(0, math.min(CARET_DEPTH, target_top - marker_y))
     return {
         baseline = baseline,
         marker_y = marker_y,
         caret_depth = caret_depth,
-        word_top = word_top,
+        target_top = target_top,
         top = top,
         bottom = bottom,
     }
@@ -796,8 +810,16 @@ function WordWise:paintHints(bb, x, y)
     if not (self:isEnabled() and self.hints and #self.hints > 0) then return end
     local screen_w = bb:getWidth()
     local color = Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK
-    local spacing = self:currentLineSpacing()
     local items = {}
+    local configurable = self.ui and self.ui.font and self.ui.font.configurable
+    local target_face
+    if configurable and configurable.font_face and configurable.font_size then
+        local ok, face = pcall(function()
+            return Font:getFace(configurable.font_face, configurable.font_size)
+        end)
+        if ok then target_face = face end
+    end
+
     for _, hint in ipairs(self.hints) do
         hint.hitbox = nil
         local size = RenderText:sizeUtf8Text(0, screen_w, self.gloss_face, hint.text, true, false)
@@ -806,7 +828,15 @@ function WordWise:paintHints(bb, x, y)
         local max_x = screen_w - width - 2
         if tx > max_x then tx = max_x end
         if tx < 2 then tx = 2 end
-        local vertical = self:hintVerticalPlacement(hint.box, size, spacing)
+        local target_size
+        if target_face then
+            local ok, measured = pcall(function()
+                return RenderText:sizeUtf8Text(
+                    0, screen_w, target_face, hint.surface, true, false)
+            end)
+            if ok then target_size = measured end
+        end
+        local vertical = self:hintVerticalPlacement(hint.box, size, target_size)
         if vertical then
             items[#items + 1] = {
                 hint = hint, x0 = tx, x1 = tx + width, band = hint.box.y,

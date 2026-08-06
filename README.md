@@ -5,7 +5,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.3`.
+Current plugin version: `2026.07.1-rc1.3.4`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -32,6 +32,18 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.3.4 Hint Vertical Alignment Round 2 OTA Test
+
+RC1.3.4 removes the RC1.3.3 line-spacing estimate that remained too high on
+the iReader. It measures the target word with the active book face, centers
+the measured glyph height inside the CRE box, and anchors the gloss directly
+above that estimate.
+
+Compact or top-screen hints fail closed when safe placement is impossible.
+Dictionary rows remain unchanged from RC1.3.3; only matching database build
+metadata advances for the four-asset Full OTA test. PR #5 remains draft until
+the same page is validated on-device.
 
 ## RC1.3.3 Hint Vertical Alignment OTA Test
 
