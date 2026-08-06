@@ -5,7 +5,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.4`.
+Current plugin version: `2026.07.1-rc1.3.5`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -32,6 +32,19 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.3.5 Upstream-Style Hint Renderer OTA Test
+
+RC1.3.5 abandons the RC1.3.4 target-glyph measurement experiment and returns
+to the simpler renderer strategy used by `asxelot/wordwise.koplugin`.
+
+The plugin now reserves a stable 180% interline band, uses font-level gloss
+metrics, draws a horizontal rule with a fixed downward caret, centers the
+complete hint unit in the raised leading, and clamps long glosses to the real
+text column. Placement no longer has a target-measurement failure path.
+
+Dictionary rows remain unchanged from RC1.3.4; only matching database build
+metadata advances for the four-asset Full OTA test.
 
 ## RC1.3.4 Hint Vertical Alignment Round 2 OTA Test
 

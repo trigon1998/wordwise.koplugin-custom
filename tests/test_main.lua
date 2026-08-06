@@ -107,35 +107,33 @@ assert(layout:pageLayoutSignature(records) ~= signature,
     "viewport/orientation changes must invalidate the layout signature")
 
 local tall_line_box = { x = 10, y = 100, w = 40, h = 72 }
-local gloss_size = { x = 60, y_top = 8, y_bottom = 2 }
-local target_size = { x = 40, y_top = 28, y_bottom = 7 }
+local gloss_metrics = { ascent = 8, descent = 2 }
 local placement = layout:hintVerticalPlacement(
-    tall_line_box, gloss_size, target_size)
-assert(placement, "a normal line must have room for a gloss")
-assert_equal(placement.target_top, 119,
-    "target glyph metrics must be centered inside the CRE box")
-assert_equal(placement.baseline, 114,
-    "the gloss baseline must be anchored from the target glyph top")
-assert_equal(placement.bottom, 116,
-    "the gloss bottom must remain three pixels above the target glyph")
-assert_equal(placement.target_top - placement.bottom, 3,
-    "the visual word gap must not depend on line-spacing percentage")
-assert_equal(placement.caret_depth, 2,
-    "the caret must shrink to the safe vertical room instead of overlapping text")
+    tall_line_box, gloss_metrics, 180)
+assert(placement, "upstream-style placement must always return geometry")
+assert_equal(placement.word_top, 116,
+    "180 percent spacing must reserve an even leading band")
+assert_equal(placement.baseline, 103,
+    "gloss font metrics must define a stable baseline")
+assert_equal(placement.marker_y, 106,
+    "rule position must keep a uniform gap below the gloss")
+assert_equal(placement.marker_y + placement.caret_depth, 113,
+    "caret tip must point just above the target word")
 
 local compact_line_box = { x = 10, y = 100, w = 40, h = 20 }
-local compact_target = { x = 40, y_top = 14, y_bottom = 4 }
-assert_equal(layout:hintVerticalPlacement(
-    compact_line_box, gloss_size, compact_target), nil,
-    "a compact line must hide the hint rather than move it upward or touch the word")
+local compact = layout:hintVerticalPlacement(
+    compact_line_box, gloss_metrics, 132)
+assert(compact, "compact lines must not lose matched hints during placement")
+assert_equal(compact.baseline, 99,
+    "tight geometry must clamp above the word instead of returning nil")
+assert_equal(compact.marker_y + compact.caret_depth, 101,
+    "tight caret must still point immediately above the word")
 
-assert_equal(layout:hintVerticalPlacement(
+local top_line = layout:hintVerticalPlacement(
     { x = 10, y = 0, w = 40, h = 12 },
-    gloss_size, { x = 20, y_top = 8, y_bottom = 2 }), nil,
-    "a gloss without safe top-screen space must be hidden")
-assert_equal(layout:hintVerticalPlacement(
-    tall_line_box, gloss_size, nil), nil,
-    "target measurement failure must fail closed instead of using a stale estimate")
+    gloss_metrics, 180)
+assert(top_line.baseline <= 2,
+    "only a true top-screen collision may be skipped by paintHints")
 
 local opened
 local tap = instance({
@@ -301,12 +299,22 @@ scheduled_callbacks[2]()
 assert_equal(scheduled_computes, 1,
     "rotation must invalidate a computation scheduled with stale coordinates")
 
+matcher.render_stats = {
+    matched = 3, placed = 3, hidden = 0,
+    collisions = 0, top_hidden = 0,
+}
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.4"),
-    "diagnostics must expose the RC1.3.4 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.5"),
+    "diagnostics must expose the RC1.3.5 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
+assert(diagnostics:find(
+    "Hint renderer: upstream-style · 180% target", 1, true),
+    "diagnostics must expose the active upstream-style renderer")
+assert(diagnostics:find(
+    "Hint render: 3 matched · 3 placed · 0 hidden", 1, true),
+    "diagnostics must prove matched hints were actually painted")
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.3.4 main behavior tests: PASS")
+print("RC1.3.5 main behavior tests: PASS")
