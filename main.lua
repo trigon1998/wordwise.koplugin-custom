@@ -749,24 +749,32 @@ end
 local GLOSS_HGAP = 8
 local CARET_DEPTH = 7
 local GLOSS_RULE_GAP = 1
+local SCREEN_EDGE_GAP = 2
 
 -- Kindle-style marker learned from the upstream Word Wise renderer: a thin
 -- rule interrupted by two diagonals which meet in a downward-pointing tip.
-local function drawWordMarker(bb, x0, x1, cx, ytop, color, with_rule)
+local function drawWordMarker(bb, x0, x1, cx, rule_y, color, with_rule, direction)
     local half = CARET_DEPTH
     if cx - half < x0 then cx = x0 + half end
     if cx + half > x1 then cx = x1 - half end
     if with_rule then
         if cx - half > x0 then
-            bb:paintRect(x0, ytop, (cx - half) - x0, 1, color)
+            bb:paintRect(x0, rule_y, (cx - half) - x0, 1, color)
         end
         if x1 > cx + half then
-            bb:paintRect(cx + half, ytop, x1 - (cx + half), 1, color)
+            bb:paintRect(cx + half, rule_y, x1 - (cx + half), 1, color)
         end
     end
-    for i = 0, half do
-        bb:setPixel(cx - half + i, ytop + i, color)
-        bb:setPixel(cx + half - i, ytop + i, color)
+    if direction == "up" then
+        for i = 0, half do
+            bb:setPixel(cx - half + i, rule_y - i, color)
+            bb:setPixel(cx + half - i, rule_y - i, color)
+        end
+    else
+        for i = 0, half do
+            bb:setPixel(cx - half + i, rule_y + i, color)
+            bb:setPixel(cx + half - i, rule_y + i, color)
+        end
     end
 end
 
@@ -810,6 +818,7 @@ function WordWise:hintVerticalPlacement(box, metrics, spacing)
 
     local leading = box_h * (1 - 100 / spacing)
     local word_top = box_y + math.floor(leading / 2)
+    local word_bottom = box_y + box_h - math.ceil(leading / 2)
     local baseline = box_y + (ascent - descent) / 2
     baseline = math.floor(
         math.min(baseline, word_top - 1 - descent) + 0.5)
@@ -821,16 +830,83 @@ function WordWise:hintVerticalPlacement(box, metrics, spacing)
         baseline = baseline,
         marker_y = marker_y,
         caret_depth = CARET_DEPTH,
+        caret_direction = "down",
+        edge_mode = "above",
         word_top = word_top,
+        word_bottom = word_bottom,
         top = baseline - ascent,
         bottom = baseline + descent,
     }
+end
+
+-- Keep top-edge hints visible whenever geometry permits:
+--   1. use the normal above-word placement;
+--   2. clamp it down if a small shift still leaves the caret above the word;
+--   3. otherwise move the hint below the word and point back up;
+--   4. return nil only when neither placement fits on screen.
+function WordWise:resolveHintVerticalPlacement(
+        box, metrics, spacing, screen_top, screen_bottom)
+    local vertical = self:hintVerticalPlacement(box, metrics, spacing)
+    screen_top = tonumber(screen_top) or SCREEN_EDGE_GAP
+    screen_bottom = tonumber(screen_bottom) or math.huge
+
+    local shift = math.max(0, screen_top - vertical.top)
+    local max_shift = math.max(
+        0,
+        vertical.word_top - 1
+            - (vertical.marker_y + vertical.caret_depth))
+
+    if shift <= max_shift then
+        if shift > 0 then
+            vertical.baseline = vertical.baseline + shift
+            vertical.marker_y = vertical.marker_y + shift
+            vertical.top = vertical.top + shift
+            vertical.bottom = vertical.bottom + shift
+            vertical.edge_mode = "clamped"
+        end
+        vertical.caret_direction = "down"
+        vertical.visual_top = vertical.top
+        vertical.visual_bottom =
+            vertical.marker_y + vertical.caret_depth
+        if vertical.visual_top >= screen_top
+                and vertical.visual_bottom <= screen_bottom then
+            return vertical
+        end
+    end
+
+    local ascent = tonumber(metrics and metrics.ascent) or 0
+    local descent = math.max(
+        0, tonumber(metrics and metrics.descent) or 0)
+    local tip_y = vertical.word_bottom + 1
+    local marker_y = tip_y + CARET_DEPTH
+    local baseline = marker_y + GLOSS_RULE_GAP + ascent
+
+    local below = {
+        baseline = baseline,
+        marker_y = marker_y,
+        caret_depth = CARET_DEPTH,
+        caret_direction = "up",
+        edge_mode = "below",
+        word_top = vertical.word_top,
+        word_bottom = vertical.word_bottom,
+        top = baseline - ascent,
+        bottom = baseline + descent,
+        visual_top = tip_y,
+        visual_bottom = baseline + descent,
+    }
+
+    if below.visual_top >= screen_top
+            and below.visual_bottom <= screen_bottom then
+        return below
+    end
+    return nil
 end
 
 function WordWise:paintHints(bb, x, y)
     if not (self:isEnabled() and self.hints and #self.hints > 0) then return end
 
     local screen_w = bb:getWidth()
+    local screen_h = bb:getHeight()
     local color = Blitbuffer.COLOR_BLACK
     local spacing = self:currentLineSpacing()
     local metrics = self:getGlossMetrics()
@@ -856,6 +932,9 @@ function WordWise:paintHints(bb, x, y)
         hidden = 0,
         collisions = 0,
         top_hidden = 0,
+        top_clamped = 0,
+        top_fallbacks = 0,
+        edge_hidden = 0,
     }
 
     for _, hint in ipairs(self.hints) do
@@ -869,21 +948,35 @@ function WordWise:paintHints(bb, x, y)
         if tx > max_x then tx = max_x end
         if tx < left_bound then tx = left_bound end
 
-        local vertical = self:hintVerticalPlacement(
-            hint.box, metrics, spacing)
-        items[#items + 1] = {
-            hint = hint,
-            x0 = tx,
-            x1 = tx + width,
-            band = hint.box.y,
-            baseline = vertical.baseline,
-            marker_y = vertical.marker_y,
-            caret_depth = vertical.caret_depth,
-            word_cx = math.floor(
-                hint.box.x + hint.box.w / 2 + 0.5),
-            top = vertical.top,
-            bottom = vertical.bottom,
-        }
+        local vertical = self:resolveHintVerticalPlacement(
+            hint.box, metrics, spacing,
+            SCREEN_EDGE_GAP, screen_h - SCREEN_EDGE_GAP)
+        if vertical then
+            items[#items + 1] = {
+                hint = hint,
+                x0 = tx,
+                x1 = tx + width,
+                band = hint.box.y,
+                baseline = vertical.baseline,
+                marker_y = vertical.marker_y,
+                caret_depth = vertical.caret_depth,
+                caret_direction = vertical.caret_direction,
+                edge_mode = vertical.edge_mode,
+                word_cx = math.floor(
+                    hint.box.x + hint.box.w / 2 + 0.5),
+                top = vertical.top,
+                bottom = vertical.bottom,
+                visual_top = vertical.visual_top,
+                visual_bottom = vertical.visual_bottom,
+            }
+        else
+            self.render_stats.edge_hidden =
+                self.render_stats.edge_hidden + 1
+            -- Preserve the historical field for diagnostics/tests that may
+            -- still inspect it.
+            self.render_stats.top_hidden =
+                self.render_stats.top_hidden + 1
+        end
     end
 
     table.sort(items, function(a, b)
@@ -900,47 +993,67 @@ function WordWise:paintHints(bb, x, y)
         return a.x0 < b.x0
     end)
 
-    local placed = {}
+    -- Use full two-dimensional occupied rectangles. This preserves the
+    -- existing same-line collision behavior and also prevents a top-edge
+    -- below-word fallback from colliding with an above-word hint on the next
+    -- line.
+    local occupied = {}
     for _, item in ipairs(items) do
-        if item.baseline > 2 and item.marker_y >= 0 then
-            local list = placed[item.band] or {}
-            placed[item.band] = list
-            local fits = true
-            for _, interval in ipairs(list) do
-                if item.x0 < interval[2] + GLOSS_HGAP
-                        and item.x1 + GLOSS_HGAP > interval[1] then
-                    fits = false
-                    break
-                end
+        local fits = true
+        for _, rect in ipairs(occupied) do
+            local overlaps_y =
+                item.visual_top < rect.bottom
+                and item.visual_bottom > rect.top
+            local overlaps_x =
+                item.x0 < rect.x1 + GLOSS_HGAP
+                and item.x1 + GLOSS_HGAP > rect.x0
+            if overlaps_y and overlaps_x then
+                fits = false
+                break
             end
-            if fits then
-                list[#list + 1] = { item.x0, item.x1 }
-                RenderText:renderUtf8Text(
-                    bb, item.x0, item.baseline, self.gloss_face,
-                    item.hint.text, true, false, color)
-                drawWordMarker(
-                    bb, item.x0, item.x1, item.word_cx,
-                    item.marker_y, color, true)
-                item.hint.hitbox = {
-                    x = math.min(item.x0, item.hint.box.x) - 4,
-                    y = math.min(item.top, item.hint.box.y) - 4,
-                    w = math.max(item.x1,
-                        item.hint.box.x + item.hint.box.w)
-                        - math.min(item.x0, item.hint.box.x) + 8,
-                    h = math.max(
-                        item.marker_y + item.caret_depth,
-                        item.hint.box.y + item.hint.box.h)
-                        - math.min(item.top, item.hint.box.y) + 8,
-                }
-                self.render_stats.placed =
-                    self.render_stats.placed + 1
-            else
-                self.render_stats.collisions =
-                    self.render_stats.collisions + 1
+        end
+
+        if fits then
+            occupied[#occupied + 1] = {
+                x0 = item.x0,
+                x1 = item.x1,
+                top = item.visual_top,
+                bottom = item.visual_bottom,
+            }
+            RenderText:renderUtf8Text(
+                bb, item.x0, item.baseline, self.gloss_face,
+                item.hint.text, true, false, color)
+            drawWordMarker(
+                bb, item.x0, item.x1, item.word_cx,
+                item.marker_y, color, true, item.caret_direction)
+
+            local hit_top = math.min(
+                item.visual_top, item.hint.box.y)
+            local hit_bottom = math.max(
+                item.visual_bottom,
+                item.hint.box.y + item.hint.box.h)
+            item.hint.hitbox = {
+                x = math.min(item.x0, item.hint.box.x) - 4,
+                y = hit_top - 4,
+                w = math.max(
+                    item.x1,
+                    item.hint.box.x + item.hint.box.w)
+                    - math.min(item.x0, item.hint.box.x) + 8,
+                h = hit_bottom - hit_top + 8,
+            }
+
+            if item.edge_mode == "below" then
+                self.render_stats.top_fallbacks =
+                    self.render_stats.top_fallbacks + 1
+            elseif item.edge_mode == "clamped" then
+                self.render_stats.top_clamped =
+                    self.render_stats.top_clamped + 1
             end
+            self.render_stats.placed =
+                self.render_stats.placed + 1
         else
-            self.render_stats.top_hidden =
-                self.render_stats.top_hidden + 1
+            self.render_stats.collisions =
+                self.render_stats.collisions + 1
         end
     end
 
@@ -1116,13 +1229,18 @@ function WordWise:diagnosticsText()
         "Hint level: " .. tostring(self:getHintLevel()),
         "Current line spacing: " .. tostring(self:currentLineSpacing()) .. "%",
         "Page hints: " .. tostring(#(self.hints or {})),
-        "Hint renderer: upstream-style · 180% target",
+        "Hint renderer: upstream-style + top-edge fallback · 180% target",
         "Hint render: " .. string.format(
             "%d matched · %d placed · %d hidden",
             (self.render_stats and self.render_stats.matched)
                 or #(self.hints or {}),
             (self.render_stats and self.render_stats.placed) or 0,
             (self.render_stats and self.render_stats.hidden) or 0),
+        "Top edge: " .. string.format(
+            "%d below · %d clamped · %d edge-hidden",
+            (self.render_stats and self.render_stats.top_fallbacks) or 0,
+            (self.render_stats and self.render_stats.top_clamped) or 0,
+            (self.render_stats and self.render_stats.edge_hidden) or 0),
         "Update repository: " .. (WordWiseUpdater.getRepository() or "not configured"),
         "OTA database bundle: " .. (WordWiseUpdater.getInstalledDatabaseBundleVersion
             and (WordWiseUpdater.getInstalledDatabaseBundleVersion() or "not synchronized")
