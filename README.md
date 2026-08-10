@@ -1,93 +1,95 @@
-# Word Wise English–Vietnamese for KOReader
+# Word Wise Anh–Việt cho KOReader
 
-**Inline English–Vietnamese explanations for difficult words and phrases while you read.**
-**Hiển thị giải nghĩa Anh–Việt ngay trên trang sách trong KOReader.**
+**Hiển thị giải nghĩa Anh–Việt ngay phía trên những từ và cụm từ khó khi bạn đọc sách bằng KOReader.**
 
-[![Latest release](https://img.shields.io/github/v/release/trigon1998/wordwise.koplugin-custom?include_prereleases&sort=semver&label=release)](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
-[![CI](https://github.com/trigon1998/wordwise.koplugin-custom/actions/workflows/ci.yml/badge.svg)](https://github.com/trigon1998/wordwise.koplugin-custom/actions/workflows/ci.yml)
-[![Plugin downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftrigon1998%2Fwordwise.koplugin-custom%2Fmain%2Fstats%2Fdownloads-badge.json)](stats/downloads.svg)
-[![Stars](https://img.shields.io/github/stars/trigon1998/wordwise.koplugin-custom?style=flat)](https://github.com/trigon1998/wordwise.koplugin-custom/stargazers)
+[![Bản phát hành mới nhất](https://img.shields.io/github/v/release/trigon1998/wordwise.koplugin-custom?include_prereleases&sort=semver&label=phi%C3%AAn%20b%E1%BA%A3n)](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
+[![Kiểm thử CI](https://github.com/trigon1998/wordwise.koplugin-custom/actions/workflows/ci.yml/badge.svg)](https://github.com/trigon1998/wordwise.koplugin-custom/actions/workflows/ci.yml)
+[![Lượt tải plugin](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftrigon1998%2Fwordwise.koplugin-custom%2Fmain%2Fstats%2Fdownloads-badge.json)](stats/downloads.svg)
+[![GitHub Stars](https://img.shields.io/github/stars/trigon1998/wordwise.koplugin-custom?style=flat&label=stars)](https://github.com/trigon1998/wordwise.koplugin-custom/stargazers)
 
 <p align="center">
-  <img src="docs/wordwise-preview.svg" width="860" alt="Word Wise hints displayed above difficult words in a KOReader page">
+  <img src="docs/wordwise-preview.svg" width="860" alt="Word Wise hiển thị giải nghĩa ngay phía trên từ khó trong KOReader">
 </p>
 
-## What is this? · Đây là gì?
-
-Word Wise is a KOReader plugin for English learners. It scans only the page
-currently visible on screen, finds selected difficult words or phrases, and
-places a short explanation directly above them. A Kindle-style rule and
-downward caret show exactly which word each hint belongs to.
+## Word Wise là gì?
 
 Word Wise là plugin dành cho người đọc sách tiếng Anh bằng KOReader. Plugin chỉ
 quét trang đang hiển thị, tìm những từ hoặc cụm từ khó phù hợp rồi đặt giải
-nghĩa ngắn ngay phía trên. Dấu mũi nhọn hướng xuống giúp xác định chính xác từ
-được giải thích mà không cần rời trang để mở từ điển.
+nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn hướng xuống giúp
+xác định chính xác từ đang được giải thích mà không cần rời khỏi trang sách để
+mở từ điển.
 
-Current version: **`2026.07.1-rc1.3.5`**
-Current channel: **prerelease / RC**
+**Phiên bản hiện tại:** `2026.07.1-rc1.3.5`
+**Kênh cập nhật:** bản thử nghiệm RC
 
-## Highlights
+## Tính năng nổi bật
 
-| Feature | What it does |
+| Tính năng | Công dụng |
 |---|---|
-| Inline hints | Shows short English definitions and reviewed Vietnamese translations above the text |
-| Phrase matching | Recognizes phrases up to five words, not only isolated words |
-| Three domains | Separate General, Economics and Physics databases |
-| Context filtering | Uses nearby words to reduce obviously wrong meanings |
-| Known words | Lets you hide words you already know across books |
-| Kindle-style marker | Uses a horizontal rule and downward caret to point to the exact word |
-| Full OTA updates | Updates both plugin code and the three databases from the Word Wise menu |
-| Safe rollback | Keeps backups and never packages reading progress, book sidecars or `known_words.db` |
+| Giải nghĩa ngay trên trang | Hiển thị định nghĩa tiếng Anh ngắn và bản dịch tiếng Việt đã được rà soát |
+| Nhận diện cụm từ | Có thể nhận diện cụm từ dài tối đa 5 từ, không chỉ từng từ riêng lẻ |
+| Ba lĩnh vực | Cơ sở dữ liệu Tổng quát, Kinh tế và Vật lý |
+| Lọc theo ngữ cảnh | Dùng các từ xung quanh để hạn chế chọn nhầm nghĩa |
+| Từ đã biết | Cho phép ẩn những từ bạn đã biết và dùng chung danh sách này giữa các sách |
+| Dấu chỉ từ trực quan | Đường ngang và dấu mũi nhọn hướng xuống chỉ đúng từ đang được giải thích |
+| Cập nhật OTA đầy đủ | Cập nhật cả plugin và ba cơ sở dữ liệu ngay trong menu Word Wise |
+| Khôi phục an toàn | Luôn tạo bản sao lưu và không đụng đến tiến độ đọc, sidecar hay `known_words.db` |
 
-## Compatibility
+## Khả năng tương thích
 
-Designed for:
+Plugin được thiết kế cho:
 
-- KOReader reflowable documents handled by CREngine, such as EPUB and HTML;
-- Android-based readers;
-- tested primarily with KOReader 2026.03 “Snowflake” on iReader Ocean 5 Pro.
+- tài liệu có thể dàn lại trang bằng CREngine của KOReader, chẳng hạn EPUB và HTML;
+- thiết bị đọc sách chạy Android;
+- được kiểm tra chủ yếu với KOReader 2026.03 “Snowflake” trên iReader Ocean 5 Pro.
 
-Fixed-layout PDF, DJVU and comic documents are not supported by the inline
-word-coordinate renderer.
+Các tài liệu bố cục cố định như PDF, DJVU và truyện tranh không được hỗ trợ bởi
+cơ chế xác định tọa độ từ trên trang.
 
-## Install or update
+## Cài đặt và cập nhật
 
-### Existing Word Wise users
+### Đang sử dụng Word Wise
 
-Open:
+Mở:
 
 ```text
 Word Wise → Updates → Check for updates
 ```
 
-For RC builds, enable **Include prerelease/RC updates**, then choose
-**Update all and restart**. The updater verifies the plugin ZIP, database ZIP,
-checksums, manifest and SQLite integrity before installation.
+Đối với bản RC, bật **Include prerelease/RC updates**, sau đó chọn
+**Update all and restart**.
 
-### First installation
+Trước khi cài đặt, trình cập nhật sẽ kiểm tra:
 
-1. Open the [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases) page.
-2. Download the matching plugin and database ZIP files for the same version.
-3. Exit KOReader completely.
-4. Copy the extracted `wordwise.koplugin` folder into `koreader/plugins/`.
-5. Extract the database package into the directory that already contains
-   `koreader/`.
-6. Restart KOReader.
-7. Open **Word Wise → Diagnostics** and confirm that plugin and database versions match.
+- ZIP plugin;
+- ZIP cơ sở dữ liệu;
+- SHA-256;
+- manifest;
+- tính toàn vẹn SQLite;
+- sự khớp phiên bản giữa plugin và database.
 
-Do not delete or replace:
+### Cài đặt lần đầu
+
+1. Mở trang [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases).
+2. Tải ZIP plugin và ZIP cơ sở dữ liệu có cùng số phiên bản.
+3. Thoát hoàn toàn khỏi KOReader.
+4. Chép thư mục `wordwise.koplugin` đã giải nén vào `koreader/plugins/`.
+5. Giải nén gói cơ sở dữ liệu vào thư mục đang chứa `koreader/`.
+6. Khởi động lại KOReader.
+7. Mở **Word Wise → Diagnostics** và kiểm tra phiên bản plugin cùng phiên bản cơ sở dữ liệu phải trùng nhau.
+
+Không xóa hoặc thay thế:
 
 ```text
 <KOReader data>/wordwise/known_words.db
 ```
 
-## How it protects your data
+## Dữ liệu của bạn được bảo vệ như thế nào?
 
-The Git repository contains plugin code only. Dictionary databases are attached
-separately to GitHub Releases.
+Git repository này chỉ chứa mã nguồn plugin. Các cơ sở dữ liệu từ điển được
+đính kèm riêng trong GitHub Releases.
 
-An update is allowed to replace only:
+Bản cập nhật chỉ được phép thay thế:
 
 ```text
 koreader/plugins/wordwise.koplugin/
@@ -96,99 +98,102 @@ koreader/wordwise/databases/wordwise_economics.db
 koreader/wordwise/databases/wordwise_physics.db
 ```
 
-The updater does **not** package or replace:
+Trình cập nhật **không đóng gói hoặc thay thế**:
 
 - `known_words.db`;
-- reading progress;
-- highlights and notes;
-- per-book KOReader sidecars;
-- unrelated KOReader settings.
+- tiến độ đọc;
+- phần tô sáng và ghi chú;
+- sidecar riêng của từng sách;
+- các thiết lập KOReader không liên quan.
 
-The plugin contacts GitHub only when you manually check for an update. It does
-not store a GitHub personal access token on the reading device.
+Plugin chỉ kết nối tới GitHub khi bạn chủ động kiểm tra cập nhật và không lưu
+GitHub Personal Access Token trên thiết bị đọc sách.
 
-## Download statistics
+## Thống kê lượt tải
 
-The chart below records cumulative downloads of actual plugin ZIP assets whose
-names match `wordwise.koplugin-v*.zip`. Checksums, database packages and
-GitHub-generated source archives are excluded.
+Biểu đồ dưới đây ghi nhận tổng lượt tải của đúng các file plugin ZIP có tên
+khớp với `wordwise.koplugin-v*.zip`.
 
-[![Plugin ZIP download history](stats/downloads.svg)](stats/downloads.json)
+**Không tính** file checksum, gói database hoặc source archive do GitHub tự tạo.
 
-The history begins when the tracker is enabled; GitHub exposes the current
-cumulative count for each release asset but does not provide a complete
-day-by-day history retroactively.
+[![Lịch sử lượt tải plugin ZIP](stats/downloads.svg)](stats/downloads.json)
 
-Repository owners can also view GitHub’s private rolling traffic report under:
+Dữ liệu lịch sử bắt đầu từ thời điểm hệ thống thống kê được bật. GitHub cung cấp
+tổng lượt tải hiện tại của từng asset nhưng không cung cấp đầy đủ lịch sử theo
+từng ngày trong quá khứ.
+
+Chủ repository có thể xem thống kê truy cập riêng tại:
 
 ```text
 Insights → Traffic
 ```
 
-That report includes repository views, unique visitors, clones, referrers and
-popular content, but it is not published publicly in this README.
+Mục này gồm lượt xem repository, người xem riêng biệt, lượt clone, nguồn truy
+cập và nội dung được xem nhiều. Dữ liệu Traffic không được công khai trong
+README.
 
-## Current release: RC1.3.5
+## Phiên bản hiện tại: RC1.3.5
 
-RC1.3.5 replaces the unsuccessful target-glyph measurement experiment with the
-simpler rendering strategy proven by
-[`asxelot/wordwise.koplugin`](https://github.com/asxelot/wordwise.koplugin):
+RC1.3.5 chuyển sang chiến lược hiển thị đơn giản và ổn định hơn, dựa trên cách
+làm của [`asxelot/wordwise.koplugin`](https://github.com/asxelot/wordwise.koplugin):
 
-- stable 180% line spacing while automatic spacing is enabled;
-- one font-level ascent/descent pair for consistent hint placement;
-- horizontal rule with a fixed downward caret;
-- clamping to the actual rendered text column;
-- render diagnostics for matched, placed and hidden hints.
+- khoảng cách dòng tự động 180% để dành vùng cho hint;
+- dùng chung font metrics để đặt hint nhất quán;
+- đường ngang cùng dấu mũi nhọn cố định hướng xuống;
+- giới hạn hint trong cột văn bản thực tế;
+- Diagnostics hiển thị số hint tìm thấy, đã đặt và bị ẩn.
 
-See the [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
-page for checksums and complete release notes.
+Xem trang [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
+để tải file, kiểm tra checksum và đọc ghi chú phát hành.
 
-## Troubleshooting
+## Xử lý sự cố
 
-### Diagnostics finds hints but none appear
+### Diagnostics tìm thấy hint nhưng không hiển thị
 
-Open **Word Wise → Diagnostics** and inspect:
+Mở **Word Wise → Diagnostics** và kiểm tra:
 
 ```text
 Hint render: … matched · … placed · … hidden
 ```
 
-A healthy page should report at least one `placed` hint when `Page hints` is
-greater than zero.
+Khi `Page hints` lớn hơn 0, trang hoạt động bình thường cần có ít nhất một hint
+ở trạng thái `placed`.
 
-### Restore the previous version
+### Khôi phục phiên bản trước
 
-Open:
+Mở:
 
 ```text
 Word Wise → Updates → Restore previous version
 ```
 
-Backups are kept under KOReader’s Word Wise update directories. Known words and
-book sidecars are outside those backup targets.
+Các bản sao lưu nằm trong thư mục cập nhật Word Wise của KOReader.
+`known_words.db` và sidecar sách không thuộc phạm vi thay thế của updater.
 
-### The page becomes too widely spaced
+### Khoảng cách dòng quá rộng
 
-RC1.3.5 intentionally uses 180% automatic line spacing to reserve a reliable
-hint band. Disable automatic spacing or turn Word Wise off to restore the
-captured original spacing.
+RC1.3.5 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
+cho hint. Tắt tự động điều chỉnh khoảng cách hoặc tắt Word Wise để khôi phục
+khoảng cách dòng ban đầu đã được ghi nhớ.
 
-## Development and technical reference
+## Tài liệu kỹ thuật
 
-Detailed data-integrity rules, release history, OTA asset contracts, build
-commands and recovery procedures have been moved to:
+Các tài liệu dành cho phát triển và bảo trì:
 
-- [Technical reference and release history](docs/TECHNICAL_REFERENCE.md)
-- [Data maintenance](DATA_MAINTENANCE.md)
-- [Performance testing](PERFORMANCE_TEST.md)
-- [Repository notice](NOTICE.md)
+- [Tài liệu kỹ thuật và lịch sử phát hành](docs/TECHNICAL_REFERENCE.md)
+- [Quy trình bảo trì dữ liệu](DATA_MAINTENANCE.md)
+- [Kiểm tra hiệu năng](PERFORMANCE_TEST.md)
+- [Thông báo về repository](NOTICE.md)
 
-## Credits and distribution status
+`docs/TECHNICAL_REFERENCE.md` giữ nguyên nội dung kỹ thuật và lịch sử cũ để
+không làm mất thông tin phát triển.
 
-This is a code-only maintenance fork derived from
+## Ghi nhận và trạng thái phân phối
+
+Đây là bản fork bảo trì chỉ chứa mã nguồn, được phát triển từ
 [`asxelot/wordwise.koplugin`](https://github.com/asxelot/wordwise.koplugin).
 
-The upstream repository does not publish an explicit open-source license. The
-repository owner confirms private permission from the upstream author to modify
-and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the exact
-scope.
+Repository upstream không công bố giấy phép nguồn mở rõ ràng. Chủ repository
+xác nhận đã có sự cho phép riêng từ tác giả upstream để chỉnh sửa và phân phối
+lại bản fork chỉ chứa mã nguồn này. Xem [NOTICE.md](NOTICE.md) để biết phạm vi
+cụ thể.

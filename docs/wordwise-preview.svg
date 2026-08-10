@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
-  <title id="title">Word Wise English–Vietnamese inline hint preview</title>
-  <desc id="desc">A stylized KOReader page showing short definitions, horizontal rules and downward carets above difficult words.</desc>
+  <title id="title">Minh họa Word Wise Anh–Việt trong KOReader</title>
+  <desc id="desc">Trang sách KOReader minh họa giải nghĩa ngắn, đường ngang và dấu mũi nhọn hướng xuống phía trên các từ khó.</desc>
   <rect width="1200" height="620" rx="28" fill="#ece9e1"/>
   <rect x="38" y="30" width="1124" height="560" rx="18" fill="#fbfaf6" stroke="#cbc6ba" stroke-width="3"/>
   <text x="82" y="82" font-family="system-ui, sans-serif" font-size="22" font-weight="700" fill="#34322f">WORD WISE · KOReader</text>
-  <text x="1088" y="82" text-anchor="end" font-family="system-ui, sans-serif" font-size="17" fill="#77736a">English–Vietnamese</text>
+  <text x="1088" y="82" text-anchor="end" font-family="system-ui, sans-serif" font-size="17" fill="#77736a">Giải nghĩa Anh–Việt</text>
   <g font-family="Georgia, serif" font-size="28" fill="#292824">
     <text x="82" y="180">Innovation often begins when an idea spreads beyond a single team.</text>
     <text x="82" y="290">A decentralized network can continue working without one central authority.</text>
@@ -33,5 +33,5 @@
     <path d="M811 467 L819 475 L827 467" fill="none" stroke="#3b3a36" stroke-width="2"/>
     <line x1="819" y1="475" x2="819" y2="487" stroke="#3b3a36" stroke-width="2"/>
   </g>
-  <text x="600" y="566" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#77736a">Short definitions stay attached to the exact word with a downward caret.</text>
+  <text x="600" y="566" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#77736a">Giải nghĩa ngắn luôn được nối với đúng từ bằng dấu mũi nhọn hướng xuống.</text>
 </svg>

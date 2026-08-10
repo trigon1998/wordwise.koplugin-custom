@@ -135,10 +135,10 @@ def save_svg(snapshots: list[dict], total: int) -> None:
         )
 
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">
-  <title id="title">Word Wise plugin ZIP download history</title>
-  <desc id="desc">Cumulative downloads of plugin ZIP release assets, excluding checksums and database packages.</desc>
+  <title id="title">Lịch sử lượt tải plugin ZIP của Word Wise</title>
+  <desc id="desc">Tổng lượt tải các asset plugin ZIP, không tính checksum và gói cơ sở dữ liệu.</desc>
   <rect width="{width}" height="{height}" rx="16" fill="#ffffff" stroke="#d0d5dd"/>
-  <text x="{left}" y="30" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#101828">Plugin ZIP downloads</text>
+  <text x="{left}" y="30" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#101828">Lượt tải plugin ZIP</text>
   <text x="{width-right}" y="30" text-anchor="end" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#2563eb">{total:,}</text>
   {''.join(grid)}
   {''.join(labels)}
@@ -147,10 +147,12 @@ def save_svg(snapshots: list[dict], total: int) -> None:
   {dots}
   <text x="{left}" y="{height-30}" font-family="system-ui, sans-serif" font-size="12" fill="#667085">{first_date}</text>
   <text x="{width-right}" y="{height-30}" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">{last_date}</text>
-  <text x="{width/2}" y="{height-30}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#667085">Change in displayed period: +{increase:,}</text>
-  <text x="{width/2}" y="{height-10}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#98a2b3">Counts only wordwise.koplugin-v*.zip release assets</text>
+  <text x="{width/2}" y="{height-30}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#667085">Mức tăng trong giai đoạn hiển thị: +{increase:,}</text>
+  <text x="{width/2}" y="{height-10}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#98a2b3">Chỉ tính các asset phát hành wordwise.koplugin-v*.zip</text>
 </svg>
 '''
+    svg = "\n".join(line.rstrip() for line in svg.splitlines()) + "\n"
+    svg = "\n".join(line.rstrip() for line in svg.splitlines()) + "\n"
     SVG_PATH.write_text(svg, encoding="utf-8")
 
 
@@ -185,7 +187,7 @@ def main() -> None:
         json.dumps(
             {
                 "schemaVersion": 1,
-                "label": "plugin downloads",
+                "label": "lượt tải plugin",
                 "message": f"{total:,}",
                 "color": "2563eb",
             },
