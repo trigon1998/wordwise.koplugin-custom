@@ -84,6 +84,188 @@ Không xóa hoặc thay thế:
 <KOReader data>/wordwise/known_words.db
 ```
 
+## Hướng dẫn sử dụng
+
+### 1. Bật Word Wise cho một cuốn sách
+
+Mở một sách tiếng Anh được KOReader xử lý ở chế độ reflowable, sau đó vào:
+
+```text
+Word Wise → Enable inline hints
+```
+
+Khi Word Wise được bật, plugin sẽ phân tích trang đang hiển thị và tự chèn
+giải nghĩa phía trên một số từ hoặc cụm từ khó.
+
+Word Wise không sửa nội dung file sách. Các hint chỉ được vẽ thêm trên giao
+diện khi đọc.
+
+### 2. Chọn loại nội dung của sách
+
+Ở lần thiết lập đầu tiên cho một cuốn sách, Word Wise có thể đề xuất một trong
+ba cơ sở dữ liệu:
+
+- **General** — sách văn học, phi hư cấu và nội dung tiếng Anh thông thường;
+- **Economics** — kinh tế, tài chính, kinh doanh;
+- **Physics** — vật lý và nội dung khoa học liên quan.
+
+Plugin sẽ phân tích một phần nội dung và thông tin của sách để đưa ra lựa chọn
+gợi ý. Bạn vẫn có thể chọn database khác nếu thấy phù hợp hơn.
+
+Thiết lập này được lưu riêng cho từng cuốn sách.
+
+### 3. Điều chỉnh số lượng từ được giải nghĩa
+
+Vào:
+
+```text
+Word Wise → Hint level
+```
+
+Word Wise có 5 mức:
+
+```text
+1 — chỉ hiện những từ hiếm/khó nhất
+2 — ít hint
+3 — trung bình
+4 — nhiều hint
+5 — nhiều hint nhất
+```
+
+Mức càng cao thì càng nhiều từ đủ điều kiện xuất hiện giải nghĩa.
+
+Mặc định:
+
+```text
+General   → Level 2
+Economics → Level 3
+Physics   → Level 3
+```
+
+Nếu cảm thấy trang quá nhiều chữ phụ, nên giảm `Hint level` thay vì tắt hoàn
+toàn Word Wise.
+
+### 4. Đọc một hint
+
+Mỗi hint gồm phần định nghĩa tiếng Anh ngắn, giải nghĩa tiếng Việt nếu có, cùng
+một đường ngang và dấu mũi nhọn hướng xuống từ đang được giải thích.
+
+Một số mục từ có thể chỉ hiện tiếng Anh nếu chưa có bản dịch tiếng Việt đã được
+xác minh phù hợp.
+
+### 5. Chạm vào hint để xem thêm
+
+Mặc định, tùy chọn:
+
+```text
+Quick tap opens Word Wise popup
+```
+
+được bật.
+
+Chạm trực tiếp vào một hint để mở cửa sổ chi tiết. Tại đây có thể xem thêm
+thông tin của mục từ và mở từ điển KOReader.
+
+Bạn cũng có thể đánh dấu:
+
+```text
+Known in [domain]
+```
+
+để coi từ đó là đã biết trong database hiện tại, hoặc:
+
+```text
+Known in all domains
+```
+
+để ẩn từ đó trong tất cả các lĩnh vực.
+
+Sau khi được đánh dấu là từ đã biết, Word Wise sẽ không tiếp tục hiển thị hint
+cho từ đó ở những trang sau.
+
+### 6. Điều chỉnh kích thước và font của hint
+
+Trong menu Word Wise có thể thay đổi font và kích thước chữ dùng cho phần giải
+nghĩa.
+
+Kích thước hint hỗ trợ từ `10` đến `18`, mặc định là `13`.
+
+Có thể dùng font riêng của giao diện hoặc chọn sử dụng cùng font với cuốn sách.
+Thiết lập font và kích thước hint áp dụng chung cho Word Wise, không chỉ riêng
+một cuốn sách.
+
+### 7. Khoảng cách dòng
+
+Để dành đủ không gian cho phần giải nghĩa phía trên từ, RC1.3.5 mặc định sử dụng:
+
+```text
+Word Wise → Line spacing → Automatic
+```
+
+Ở chế độ này Word Wise đặt khoảng cách dòng mục tiêu ở `180%`. Đây là thiết lập
+được khuyến nghị.
+
+Khi tắt Word Wise, plugin sẽ cố gắng khôi phục khoảng cách dòng mà cuốn sách sử
+dụng trước đó.
+
+Nếu muốn tự điều chỉnh khoảng cách dòng, có thể chuyển khỏi `Automatic`, nhưng
+khoảng cách quá hẹp có thể khiến một số hint không đủ chỗ để hiển thị.
+
+### 8. Thiết lập được lưu như thế nào?
+
+Các thiết lập liên quan trực tiếp đến từng cuốn sách như database, hint level,
+bật/tắt Word Wise, quick tap và line spacing của Word Wise được lưu theo cuốn
+sách trong hệ thống sidecar của KOReader.
+
+Danh sách từ đã biết được lưu riêng tại:
+
+```text
+<KOReader data>/wordwise/known_words.db
+```
+
+và có thể được sử dụng giữa nhiều cuốn sách.
+
+Font và kích thước chữ của hint là thiết lập chung của plugin.
+
+### 9. Kiểm tra Word Wise có hoạt động đúng không
+
+Mở:
+
+```text
+Word Wise → Diagnostics
+```
+
+Một số thông tin hữu ích gồm `Domain`, `Database build`, `Hint level`,
+`Current line spacing`, `Page hints` và `Hint render`.
+
+Ví dụ:
+
+```text
+Hint render: 3 matched · 3 placed · 0 hidden
+```
+
+có nghĩa là Word Wise tìm được 3 hint và cả 3 đều đã được đặt thành công lên
+trang.
+
+`Performance counters` chủ yếu dành cho kiểm tra và phát triển. Người dùng
+thông thường không cần bật tùy chọn này.
+
+### 10. Cách thiết lập khuyến nghị
+
+Đối với sách tiếng Anh thông thường:
+
+```text
+Database: General
+Hint level: 2
+Line spacing: Automatic
+Quick tap: On
+Hint font size: 13
+Performance counters: Off
+```
+
+Nếu đang đọc sách chuyên ngành kinh tế hoặc vật lý, chuyển database tương ứng
+và bắt đầu với `Hint level 3`, sau đó tăng hoặc giảm theo độ khó của sách.
+
 ## Dữ liệu của bạn được bảo vệ như thế nào?
 
 Git repository này chỉ chứa mã nguồn plugin. Các cơ sở dữ liệu từ điển được
