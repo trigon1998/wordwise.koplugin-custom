@@ -111,26 +111,7 @@ GitHub Personal Access Token trên thiết bị đọc sách.
 
 ## Thống kê lượt tải
 
-Biểu đồ dưới đây ghi nhận tổng lượt tải của đúng các file plugin ZIP có tên
-khớp với `wordwise.koplugin-v*.zip`.
-
-**Không tính** file checksum, gói database hoặc source archive do GitHub tự tạo.
-
 [![Lịch sử lượt tải plugin ZIP](stats/downloads.svg)](stats/downloads.json)
-
-Dữ liệu lịch sử bắt đầu từ thời điểm hệ thống thống kê được bật. GitHub cung cấp
-tổng lượt tải hiện tại của từng asset nhưng không cung cấp đầy đủ lịch sử theo
-từng ngày trong quá khứ.
-
-Chủ repository có thể xem thống kê truy cập riêng tại:
-
-```text
-Insights → Traffic
-```
-
-Mục này gồm lượt xem repository, người xem riêng biệt, lượt clone, nguồn truy
-cập và nội dung được xem nhiều. Dữ liệu Traffic không được công khai trong
-README.
 
 ## Phiên bản hiện tại: RC1.3.5
 
@@ -193,7 +174,3 @@ không làm mất thông tin phát triển.
 Đây là bản fork bảo trì chỉ chứa mã nguồn, được phát triển từ
 [`asxelot/wordwise.koplugin`](https://github.com/asxelot/wordwise.koplugin).
 
-Repository upstream không công bố giấy phép nguồn mở rõ ràng. Chủ repository
-xác nhận đã có sự cho phép riêng từ tác giả upstream để chỉnh sửa và phân phối
-lại bản fork chỉ chứa mã nguồn này. Xem [NOTICE.md](NOTICE.md) để biết phạm vi
-cụ thể.
