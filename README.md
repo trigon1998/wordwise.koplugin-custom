@@ -169,6 +169,16 @@ Các tài liệu dành cho phát triển và bảo trì:
 `docs/TECHNICAL_REFERENCE.md` giữ nguyên nội dung kỹ thuật và lịch sử cũ để
 không làm mất thông tin phát triển.
 
+## Miễn trừ trách nhiệm
+
+Dự án này được phát triển nhằm mục đích **nghiên cứu, học tập, thử nghiệm kỹ thuật và sử dụng cá nhân**.
+
+Dự án **không phục vụ mục đích thương mại**, không cung cấp dịch vụ trả phí và không nhằm tạo ra lợi nhuận từ phần mềm, dữ liệu hoặc các thành phần liên quan.
+
+Phần mềm được cung cấp theo hiện trạng để phục vụ thử nghiệm. Người sử dụng tự chịu trách nhiệm đối với việc cài đặt, sử dụng, chỉnh sửa và sao lưu dữ liệu trên thiết bị của mình.
+
+Word Wise trong repository này là một dự án cộng đồng/cá nhân và không phải là sản phẩm thương mại chính thức.
+
 ## Ghi nhận và trạng thái phân phối
 
 Đây là bản fork bảo trì chỉ chứa mã nguồn, được phát triển từ
