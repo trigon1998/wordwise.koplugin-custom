@@ -7,10 +7,10 @@
   <line x1="70" y1="242.0" x2="895" y2="242.0" stroke="#d7dce2" stroke-width="1"/><line x1="70" y1="242.0" x2="895" y2="242.0" stroke="#d7dce2" stroke-width="1"/><line x1="70" y1="52.0" x2="895" y2="52.0" stroke="#d7dce2" stroke-width="1"/><line x1="70" y1="52.0" x2="895" y2="52.0" stroke="#d7dce2" stroke-width="1"/><line x1="70" y1="52.0" x2="895" y2="52.0" stroke="#d7dce2" stroke-width="1"/>
   <text x="60" y="247.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">19</text><text x="60" y="247.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">19</text><text x="60" y="57.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">20</text><text x="60" y="57.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">20</text><text x="60" y="57.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">20</text>
   <line x1="70" y1="242" x2="895" y2="242" stroke="#98a2b3"/>
-  <polyline points="70.0,242.0 173.1,242.0 276.2,52.0 379.4,52.0 482.5,52.0 585.6,52.0 688.8,52.0 791.9,52.0 895.0,52.0" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <polyline points="70.0,242.0 161.7,242.0 253.3,52.0 345.0,52.0 436.7,52.0 528.3,52.0 620.0,52.0 711.7,52.0 803.3,52.0 895.0,52.0" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 
   <text x="70" y="270" font-family="system-ui, sans-serif" font-size="12" fill="#667085">2026-08-06</text>
-  <text x="895" y="270" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">2026-08-17</text>
+  <text x="895" y="270" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#667085">2026-08-18</text>
   <text x="460.0" y="270" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#667085">Mức tăng trong giai đoạn hiển thị: +1</text>
   <text x="460.0" y="290" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#98a2b3">Chỉ tính các asset phát hành wordwise.koplugin-v*.zip</text>
 </svg>
