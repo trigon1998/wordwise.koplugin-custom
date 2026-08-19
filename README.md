@@ -19,7 +19,7 @@ nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn
 xác định chính xác từ đang được giải thích mà không cần rời khỏi trang sách để
 mở từ điển.
 
-**Phiên bản hiện tại:** `2026.07.1-rc1.3.6`
+**Phiên bản hiện tại:** `2026.07.1-rc1.3.7`
 **Kênh cập nhật:** bản thử nghiệm RC
 
 ## Tính năng nổi bật
@@ -196,7 +196,7 @@ một cuốn sách.
 
 ### 7. Khoảng cách dòng
 
-Để dành đủ không gian cho phần giải nghĩa phía trên từ, RC1.3.6 mặc định sử dụng:
+Để dành đủ không gian cho phần giải nghĩa phía trên từ, RC1.3.7 mặc định sử dụng:
 
 ```text
 Word Wise → Line spacing → Automatic
@@ -295,10 +295,9 @@ GitHub Personal Access Token trên thiết bị đọc sách.
 
 [![Lịch sử lượt tải plugin ZIP](stats/downloads.svg)](stats/downloads.json)
 
-## Phiên bản hiện tại: RC1.3.6
+## Phiên bản hiện tại: RC1.3.7
 
-RC1.3.6 bổ sung cơ chế **top-edge hint fallback** cho các từ khó nằm ở dòng đầu
-hoặc quá sát mép trên màn hình.
+RC1.3.7 giữ cơ chế **top-edge hint fallback** của RC1.3.6 và cập nhật lại ba database theo policy CEFR-A: ưu tiên CEFR-J/Octanove, dùng Words-CEFR làm fallback có lọc POS, giữ các override đã review, đồng thời loại token số/thứ tự và entry không có evidence CEFR đủ tốt.
 
 Thứ tự ưu tiên khi đặt hint:
 
@@ -310,9 +309,7 @@ Thứ tự ưu tiên khi đặt hint:
 4. chỉ ẩn hint khi cả hai vị trí đều không thể đặt an toàn trên màn hình.
 
 Renderer vẫn giữ khoảng cách dòng tự động 180%, font-level metrics, giới hạn
-theo cột văn bản và kiểm tra va chạm giữa các hint. Database từ điển không thay
-đổi nội dung so với RC1.3.5; bản Full OTA chỉ nâng metadata để plugin và ba
-database cùng phiên bản.
+theo cột văn bản và kiểm tra va chạm giữa các hint. Database từ điển trong RC1.3.7 đã được phân cấp lại theo CEFR và lọc nhiễu; bản Full OTA cập nhật plugin cùng ba database để version và metadata luôn khớp.
 
 Xem trang [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
 để tải file, kiểm tra checksum và đọc ghi chú phát hành.
@@ -343,7 +340,7 @@ Các bản sao lưu nằm trong thư mục cập nhật Word Wise của KOReader
 
 ### Khoảng cách dòng quá rộng
 
-RC1.3.6 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
+RC1.3.7 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
 cho hint. Tắt tự động điều chỉnh khoảng cách hoặc tắt Word Wise để khôi phục
 khoảng cách dòng ban đầu đã được ghi nhớ.
 

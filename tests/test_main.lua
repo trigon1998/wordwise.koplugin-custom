@@ -334,8 +334,8 @@ matcher.render_stats = {
     top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.6"),
-    "diagnostics must expose the RC1.3.6 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.7"),
+    "diagnostics must expose the RC1.3.7 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
@@ -350,4 +350,4 @@ assert(diagnostics:find(
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.3.6 main behavior tests: PASS")
+print("RC1.3.7 main behavior tests: PASS")
