@@ -14,5 +14,6 @@ run_test() {
 }
 
 run_test tests/test_main.lua
+run_test tests/test_context_scorer.lua
 run_test tests/test_db.lua
 run_test tests/test_updater.lua

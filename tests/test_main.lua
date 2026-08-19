@@ -13,6 +13,7 @@ function WidgetContainer:extend(definition)
 end
 
 local scheduled_callbacks = {}
+local render_measure_calls = 0
 
 package.preload["ffi/blitbuffer"] = function()
     return { COLOR_DARK_GRAY = 1, COLOR_BLACK = 0 }
@@ -27,7 +28,15 @@ package.preload["ui/font"] = function()
     return { getFace = function(name, size) return { name = name, size = size } end }
 end
 package.preload["ui/widget/infomessage"] = function() return widget_class() end
-package.preload["ui/rendertext"] = function() return {} end
+package.preload["ui/rendertext"] = function()
+    return {
+        sizeUtf8Text = function(_, _, _, text)
+            render_measure_calls = render_measure_calls + 1
+            return { x = #tostring(text or "") * 4, y_top = 8, y_bottom = 2 }
+        end,
+        renderUtf8Text = function() end,
+    }
+end
 package.preload["ui/widget/spinwidget"] = function() return widget_class() end
 package.preload["ui/widget/textviewer"] = function() return widget_class() end
 package.preload["ui/uimanager"] = function()
@@ -178,6 +187,12 @@ local tap = instance({
 function tap:isEnabled() return true end
 function tap:isQuickTapEnabled() return true end
 function tap:showHintPopup(hint) opened = hint end
+local width_probe = instance({ gloss_face = {} })
+local first_width = width_probe:getGlossTextWidth("cached gloss", 100)
+local second_width = width_probe:getGlossTextWidth("cached gloss", 100)
+assert_equal(first_width, second_width, "cached gloss width must remain stable")
+assert_equal(render_measure_calls, 1, "repeated gloss measurement must use the width cache")
+
 assert_equal(tap:onHintTap({ pos = { x = 55, y = 55 } }), false,
     "a collision-hidden hint must not receive taps")
 assert_equal(opened, nil, "hidden hint must not open a popup")

@@ -44,6 +44,8 @@ local MAX_GLOSS_FONT_SIZE = 18
 local MAX_HINTS_PER_PAGE = 10
 local WORD_WALK_GUARD = 4000
 local PAGE_CACHE_LIMIT = 3
+local VISIBLE_WORD_CACHE_LIMIT = 3
+local TEXT_WIDTH_CACHE_LIMIT = 256
 local DEFAULT_AUTO_SPACING = 180
 local DOMAIN_LABELS = { general = "General", economics = "Economics", physics = "Physics" }
 local DEFAULT_PHRASE_LENGTHS = { 5, 4, 3, 2 }
@@ -150,6 +152,10 @@ function WordWise:resetPerformanceStats()
         last_phrase_probes = 0,
         last_scan_ms = 0,
         max_scan_ms = 0,
+        font_measure_hits = 0,
+        font_measure_misses = 0,
+        visible_word_cache_hits = 0,
+        visible_word_cache_misses = 0,
     }
 end
 
@@ -174,6 +180,10 @@ function WordWise:buildGlossFace()
     if not ok or not face then face = Font:getFace("infofont", self:getGlossFontSize()) end
     self.gloss_face = face
     self._gloss_metrics = nil
+    self._gloss_width_cache = {}
+    self._gloss_width_cache_order = {}
+    self._gloss_width_cache_face = face
+    self._gloss_width_cache_screen_w = nil
     self.gloss_face_book_font = choice == "same_as_book" and tostring(name) or nil
 end
 
@@ -233,6 +243,10 @@ function WordWise:init()
     ensure_dir(DB_DIR)
     self.hints = {}
     self.page_cache, self.page_cache_order = {}, {}
+    self.visible_words_cache, self.visible_words_cache_order = {}, {}
+    self._gloss_width_cache = {}
+    self._gloss_width_cache_face = self.gloss_face
+    self._gloss_width_cache_screen_w = nil
     self.spacing_candidate, self.spacing_candidate_count = nil, 0
     self.spacing_cooldown = 0
     self.compute_pending = nil
@@ -461,6 +475,7 @@ function WordWise:onCloseDocument()
     self.known_words = nil
     self.hints = {}
     self.page_cache, self.page_cache_order = {}, {}
+    self.visible_words_cache, self.visible_words_cache_order = {}, {}
 end
 
 function WordWise:schedulePageHintCompute()
@@ -484,13 +499,30 @@ function WordWise:schedulePageHintCompute()
 end
 
 function WordWise:onPosUpdate() self:schedulePageHintCompute() end
-function WordWise:onPageUpdate() self:schedulePageHintCompute() end
+function WordWise:onPageUpdate()
+    self:clearVisibleWordsCache()
+    self:schedulePageHintCompute()
+end
 function WordWise:onSetDimensions()
     -- Rotation can briefly leave the previous page coordinates on screen.
     -- Drop both hints and cached coordinates before KOReader finishes reflowing.
     self.compute_pending = nil
     self.hints = {}
+    self:clearVisibleWordsCache()
     self:clearPageCache()
+end
+
+function WordWise:clearVisibleWordsCache()
+    self.visible_words_cache, self.visible_words_cache_order = {}, {}
+end
+
+function WordWise:cacheVisibleWords(key, records)
+    self.visible_words_cache[key] = records
+    self.visible_words_cache_order[#self.visible_words_cache_order + 1] = key
+    while #self.visible_words_cache_order > VISIBLE_WORD_CACHE_LIMIT do
+        local old = table.remove(self.visible_words_cache_order, 1)
+        if old ~= key then self.visible_words_cache[old] = nil end
+    end
 end
 
 function WordWise:clearPageCache()
@@ -506,11 +538,36 @@ function WordWise:cachePage(key, hints)
     end
 end
 
+function WordWise:visibleWordsCacheKey(page)
+    local dimen = self.ui and self.ui.view and self.ui.view.dimen
+    local configurable = self.ui and self.ui.font and self.ui.font.configurable
+    return table.concat({
+        tostring(page),
+        tostring(dimen and dimen.x), tostring(dimen and dimen.y),
+        tostring(dimen and dimen.w), tostring(dimen and dimen.h),
+        tostring(configurable and configurable.font_face),
+        tostring(configurable and configurable.font_size),
+        tostring(configurable and configurable.line_spacing),
+    }, "|")
+end
+
 function WordWise:collectVisibleWords()
     local doc = self.ui.document
     local page = doc:getCurrentPage()
+    local cache_key = self:visibleWordsCacheKey(page)
+    local cached = self.visible_words_cache and self.visible_words_cache[cache_key]
+    local perf = self:isPerformanceDiagnosticsEnabled()
+        and self:getPerformanceStats() or nil
+    if cached then
+        if perf then perf.visible_word_cache_hits = perf.visible_word_cache_hits + 1 end
+        return cached, page
+    end
+    if perf then perf.visible_word_cache_misses = perf.visible_word_cache_misses + 1 end
     local start_xp = doc:getPageXPointer(page)
-    if not start_xp then return {}, page end
+    if not start_xp then
+        self:cacheVisibleWords(cache_key, {})
+        return {}, page
+    end
     local records, xp, guard = {}, doc:getNextVisibleWordStart(start_xp), 0
     while xp and guard < WORD_WALK_GUARD do
         guard = guard + 1
@@ -523,13 +580,17 @@ function WordWise:collectVisibleWords()
             local boxes = doc:getScreenBoxesFromPositions(xp, end_xp, true)
             local box = boxes and boxes[1]
             if box and box.w > 0 and box.h > 0 then
-                records[#records + 1] = { surface = surface, key = key, xp = xp, end_xp = end_xp, box = box }
+                records[#records + 1] = {
+                    surface = surface, key = key, lower = key:lower(),
+                    xp = xp, end_xp = end_xp, box = box,
+                }
             end
         end
         local next_xp = doc:getNextVisibleWordStart(end_xp)
         if not next_xp or next_xp == xp then break end
         xp = next_xp
     end
+    self:cacheVisibleWords(cache_key, records)
     return records, page
 end
 
@@ -665,7 +726,7 @@ function WordWise:computePageHints()
 
     local cap_counts, lower_counts = {}, {}
     for _, record in ipairs(records) do
-        local lower = record.key:lower()
+        local lower = record.lower or record.key:lower()
         if record.surface:match("^[A-Z][a-z][A-Za-z'’-]*$") then
             cap_counts[lower] = (cap_counts[lower] or 0) + 1
         else
@@ -674,6 +735,18 @@ function WordWise:computePageHints()
     end
 
     local candidates, i, level, phrase_probes = {}, 1, self:getHintLevel(), 0
+    local context_cache = {}
+    local function prepared_context(first, last)
+        local key = tostring(first) .. ":" .. tostring(last)
+        local cached = context_cache[key]
+        if cached then return cached.words, cached.set end
+        local words = self:contextWords(records, first, last)
+        local prepared_set = ContextScorer.prepare
+            and ContextScorer.prepare(words) or words
+        local prepared = { words = words, set = prepared_set }
+        context_cache[key] = prepared
+        return prepared.words, prepared.set
+    end
     while i <= #records do
         local matched, consumed
         local remaining = math.min(MAX_PHRASE_WORDS, #records - i + 1)
@@ -687,8 +760,16 @@ function WordWise:computePageHints()
                 local phrase = table.concat(surfaces, " ")
                 local entry = db:lookupExact(phrase)
                 if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
-                    local context = self:contextWords(records, i, i + length - 1)
-                    local accepted, confidence = ContextScorer.accept(entry, context)
+                    local context_words, context_set =
+                        prepared_context(i, i + length - 1)
+                    local accepted, confidence
+                    if ContextScorer.acceptPrepared then
+                        accepted, confidence =
+                            ContextScorer.acceptPrepared(entry, context_set)
+                    else
+                        accepted, confidence =
+                            ContextScorer.accept(entry, context_words)
+                    end
                     if accepted then
                         matched = self:makeHint(entry, phrase, records, i, i + length - 1, confidence)
                         consumed = length
@@ -704,14 +785,21 @@ function WordWise:computePageHints()
             if useful and not record.key:find("https?", 1, true) then
                 local entry = db:lookupWord(record.key)
                 if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
-                    local lower = record.key:lower()
+                    local lower = record.lower or record.key:lower()
                     local repeated_capitalized = (cap_counts[lower] or 0) >= 2
                         and (lower_counts[lower] or 0) == 0
                     local looks_like_name = entry.domain == "general"
                         and ((self.proper_names and self.proper_names[lower]) or repeated_capitalized)
                     if not looks_like_name then
-                        local context = self:contextWords(records, i, i)
-                        local accepted, confidence = ContextScorer.accept(entry, context)
+                        local context_words, context_set = prepared_context(i, i)
+                        local accepted, confidence
+                        if ContextScorer.acceptPrepared then
+                            accepted, confidence =
+                                ContextScorer.acceptPrepared(entry, context_set)
+                        else
+                            accepted, confidence =
+                                ContextScorer.accept(entry, context_words)
+                        end
                         if accepted then matched = self:makeHint(entry, record.surface, records, i, i, confidence) end
                     end
                 end
@@ -809,6 +897,37 @@ end
 -- the CRE line box. Center the whole gloss + rule + caret unit in that band and
 -- clamp only to keep the caret above the word. No target-font measurement and
 -- no nil placement path.
+function WordWise:getGlossTextWidth(text, screen_w)
+    local cache = self._gloss_width_cache
+    if not cache or self._gloss_width_cache_face ~= self.gloss_face
+            or self._gloss_width_cache_screen_w ~= screen_w then
+        cache = {}
+        self._gloss_width_cache = cache
+        self._gloss_width_cache_order = {}
+        self._gloss_width_cache_face = self.gloss_face
+        self._gloss_width_cache_screen_w = screen_w
+    end
+    local width = cache[text]
+    local stats = self:isPerformanceDiagnosticsEnabled()
+        and self:getPerformanceStats() or nil
+    if width ~= nil then
+        if stats then stats.font_measure_hits = stats.font_measure_hits + 1 end
+        return width
+    end
+    local measured = RenderText:sizeUtf8Text(
+        0, screen_w, self.gloss_face, text, true, false)
+    width = tonumber(measured and measured.x) or 0
+    cache[text] = width
+    self._gloss_width_cache_order = self._gloss_width_cache_order or {}
+    self._gloss_width_cache_order[#self._gloss_width_cache_order + 1] = text
+    while #self._gloss_width_cache_order > TEXT_WIDTH_CACHE_LIMIT do
+        local old = table.remove(self._gloss_width_cache_order, 1)
+        if old ~= text then cache[old] = nil end
+    end
+    if stats then stats.font_measure_misses = stats.font_measure_misses + 1 end
+    return width
+end
+
 function WordWise:hintVerticalPlacement(box, metrics, spacing)
     spacing = math.max(100, tonumber(spacing) or 100)
     local box_y = tonumber(box and box.y) or 0
@@ -939,9 +1058,7 @@ function WordWise:paintHints(bb, x, y)
 
     for _, hint in ipairs(self.hints) do
         hint.hitbox = nil
-        local size = RenderText:sizeUtf8Text(
-            0, screen_w, self.gloss_face, hint.text, true, false)
-        local width = size.x
+        local width = self:getGlossTextWidth(hint.text, screen_w)
         local tx = math.floor(
             hint.box.x + (hint.box.w - width) / 2 + 0.5)
         local max_x = right_bound - width
@@ -1254,6 +1371,12 @@ function WordWise:diagnosticsText()
         details[#details + 1] = string.format(
             "Scans: %d · page cache hits: %d",
             stats.scans, stats.page_cache_hits)
+        details[#details + 1] = string.format(
+            "Visible cache: %d hits · %d misses",
+            stats.visible_word_cache_hits, stats.visible_word_cache_misses)
+        details[#details + 1] = string.format(
+            "Font measure: %d hits · %d misses",
+            stats.font_measure_hits, stats.font_measure_misses)
         details[#details + 1] = string.format(
             "Last scan: %d words · %d phrase probes · %.1f ms",
             stats.last_words, stats.last_phrase_probes, stats.last_scan_ms)

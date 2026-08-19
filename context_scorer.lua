@@ -9,11 +9,17 @@ local function words_to_set(words)
     return set
 end
 
-function ContextScorer.score(entry, context_words)
+function ContextScorer.prepare(context_words)
+    return words_to_set(context_words)
+end
+
+function ContextScorer.scorePrepared(entry, context_set)
     if not entry then return 0 end
     local keywords = entry.context_keywords
-    if not keywords or keywords == "" then return entry.requires_context == 1 and 0 or 1 end
-    local set = words_to_set(context_words)
+    if not keywords or keywords == "" then
+        return entry.requires_context == 1 and 0 or 1
+    end
+    local set = context_set or {}
     local hits = 0
     for keyword in keywords:gmatch("[^,]+") do
         keyword = keyword:lower():gsub("^%s+", ""):gsub("%s+$", "")
@@ -31,10 +37,18 @@ function ContextScorer.score(entry, context_words)
     return hits
 end
 
-function ContextScorer.accept(entry, context_words)
-    local score = ContextScorer.score(entry, context_words)
+function ContextScorer.score(entry, context_words)
+    return ContextScorer.scorePrepared(entry, ContextScorer.prepare(context_words))
+end
+
+function ContextScorer.acceptPrepared(entry, context_set)
+    local score = ContextScorer.scorePrepared(entry, context_set)
     if entry.requires_context == 1 and score == 0 then return false, 0 end
     return true, score
+end
+
+function ContextScorer.accept(entry, context_words)
+    return ContextScorer.acceptPrepared(entry, ContextScorer.prepare(context_words))
 end
 
 return ContextScorer
