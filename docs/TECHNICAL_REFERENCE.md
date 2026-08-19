@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.5`.
+Current plugin version: `2026.07.1-rc1.3.6`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -36,6 +36,22 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.3.6 Top-Edge Hint Fallback OTA Test
+
+RC1.3.6 keeps difficult words at the physical top edge eligible for a visible
+hint instead of clipping the gloss or dropping the match. The renderer now
+tries normal above-word placement first, clamps small overflows when the
+downward caret can still remain above the target, then falls back below the
+word with an upward caret when there is no safe room above.
+
+The fallback participates in two-dimensional collision checks so it cannot
+overlap a neighboring hint in the same interline band. A hint is hidden only
+when neither above nor below placement fits inside the screen-safe bounds.
+
+Dictionary rows are unchanged from RC1.3.5. The matching database bundle
+advances build metadata only so the four-asset Full OTA contract remains
+synchronized for on-device testing.
 
 ## RC1.3.5 Upstream-Style Hint Renderer OTA Test
 

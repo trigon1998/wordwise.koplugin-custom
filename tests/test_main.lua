@@ -129,11 +129,40 @@ assert_equal(compact.baseline, 99,
 assert_equal(compact.marker_y + compact.caret_depth, 101,
     "tight caret must still point immediately above the word")
 
-local top_line = layout:hintVerticalPlacement(
+local top_line_base = layout:hintVerticalPlacement(
     { x = 10, y = 0, w = 40, h = 12 },
     gloss_metrics, 180)
-assert(top_line.baseline <= 2,
-    "only a true top-screen collision may be skipped by paintHints")
+assert(top_line_base.top < 2,
+    "the raw upstream placement must expose the top-edge overflow")
+
+local top_line = layout:resolveHintVerticalPlacement(
+    { x = 10, y = 0, w = 40, h = 12 },
+    gloss_metrics, 180, 2, 198)
+assert(top_line, "a top-edge hint must fall back below the target word")
+assert_equal(top_line.edge_mode, "below",
+    "true top-edge overflow must use the below-word fallback")
+assert_equal(top_line.caret_direction, "up",
+    "below-word fallback must point back up at the target")
+assert(top_line.visual_top >= 2 and top_line.visual_bottom <= 198,
+    "fallback geometry must remain fully on screen")
+
+local clamped_top = layout:resolveHintVerticalPlacement(
+    { x = 10, y = 6, w = 40, h = 72 },
+    gloss_metrics, 180, 2, 198)
+assert(clamped_top, "small top overflow must remain placeable")
+assert_equal(clamped_top.edge_mode, "clamped",
+    "small top overflow must clamp before using below-word fallback")
+assert_equal(clamped_top.top, 2,
+    "clamped hint must stop at the configured screen-safe edge")
+assert(clamped_top.marker_y + clamped_top.caret_depth
+        < clamped_top.word_top,
+    "clamping must keep the downward caret above the target word")
+
+local no_room = layout:resolveHintVerticalPlacement(
+    { x = 10, y = 0, w = 40, h = 12 },
+    gloss_metrics, 180, 2, 20)
+assert_equal(no_room, nil,
+    "edge placement may hide only when neither above nor below fits")
 
 local opened
 local tap = instance({
@@ -302,19 +331,23 @@ assert_equal(scheduled_computes, 1,
 matcher.render_stats = {
     matched = 3, placed = 3, hidden = 0,
     collisions = 0, top_hidden = 0,
+    top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
 assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.5"),
-    "diagnostics must expose the RC1.3.5 plugin version")
+    "diagnostics must expose the RC1.3.6 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
-    "Hint renderer: upstream-style · 180% target", 1, true),
+    "Hint renderer: upstream-style + top-edge fallback · 180% target", 1, true),
     "diagnostics must expose the active upstream-style renderer")
 assert(diagnostics:find(
     "Hint render: 3 matched · 3 placed · 0 hidden", 1, true),
     "diagnostics must prove matched hints were actually painted")
+assert(diagnostics:find(
+    "Top edge: 1 below · 1 clamped · 0 edge-hidden", 1, true),
+    "diagnostics must expose top-edge fallback behavior")
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.3.5 main behavior tests: PASS")
+print("RC1.3.6 main behavior tests: PASS")
