@@ -22,4 +22,4 @@ if rejected or rejected_score ~= 0 then
     error("required context must reject an empty prepared set")
 end
 
-print("RC1.3.7 context scorer tests: PASS")
+print("RC1.3.8 context scorer tests: PASS")

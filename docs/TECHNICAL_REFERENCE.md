@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.7`.
+Current plugin version: `2026.07.1-rc1.3.8`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -37,9 +37,9 @@ repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
 
-## RC1.3.7 CEFR-A Database Update and RC1.3.6 Renderer OTA Test
+## RC1.3.8 Performance OTA and RC1.3.7 CEFR-A Database Update
 
-RC1.3.7 keeps the RC1.3.6 top-edge fallback: difficult words at the physical
+RC1.3.8 keeps the RC1.3.6 top-edge fallback: difficult words at the physical
 top edge remain eligible for a visible hint instead of being clipped or
 silently dropped. The renderer tries normal above-word placement first, clamps
 small overflows when the downward caret can remain above the target, then falls
@@ -49,7 +49,7 @@ The fallback participates in two-dimensional collision checks so it cannot
 overlap a neighboring hint in the same interline band. A hint is hidden only
 when neither above nor below placement fits inside the screen-safe bounds.
 
-The RC1.3.7 database bundle applies the approved CEFR-A policy. CEFR-J v1.5 and
+The RC1.3.8 database bundle applies the approved CEFR-A policy. CEFR-J v1.5 and
 Octanove C1/C2 v1.0 are the primary labels; Words-CEFR-Dataset is a filtered
 lexical-POS fallback. Existing domain-curated/manual overrides remain eligible,
 while number/ordinal tokens and entries without sufficient CEFR evidence are
@@ -58,8 +58,7 @@ to 1 because the plugin schema has five buckets.
 
 The candidate contains 25,403 General entries, 25,649 Economics entries and
 25,620 Physics entries. It retains the existing reviewed Vietnamese glosses
-(48, 348 and 352 respectively) and does not generate new translations. The
-full four-asset OTA contract remains synchronized at `2026.07.1-rc1.3.7`; the
+(48, 348 and 352 respectively) and does not generate new translations. RC1.3.8 also adds bounded visible-page/token caches, prepared context scoring, and bounded gloss-width measurement caches. The full four-asset OTA contract remains synchronized at `2026.07.1-rc1.3.8`; the
 SQLite metadata, manifest counts and checksums are verified before release.
 
 ## RC1.3.5 Upstream-Style Hint Renderer OTA Test
