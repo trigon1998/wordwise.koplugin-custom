@@ -49,4 +49,4 @@ assert(entry.sense2_en == "city where government sits", "legacy sense2 gloss mis
 assert(entry.sense2_context_keywords == nil, "legacy entry must not invent alternate keywords")
 db:close()
 
-print("RC1.4.0 legacy database compatibility tests: PASS")
+print("RC1.4.1 legacy database compatibility tests: PASS")

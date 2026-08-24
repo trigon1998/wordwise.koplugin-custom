@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin candidate version: `2026.07.1-rc1.4.0`.
+Current plugin candidate version: `2026.07.1-rc1.4.1`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -36,6 +36,10 @@ The upstream repository does not publish an explicit open-source license. The
 repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
+
+## RC1.4.1 OTA Allow-List Hotfix
+
+RC1.4.1 permits the required top-level `WIKTIONARY_ATTRIBUTION.md` auxiliary file in the database archive allow-list. The file is still required, extracted under the staging directory, size-limited by `max_data_metadata_bytes`, and all unlisted files remain rejected. This patch does not alter database contents or user-data handling.
 
 ## RC1.4.0 Wiktionary Expansion and Hybrid Difficulty
 

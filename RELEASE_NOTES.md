@@ -1,4 +1,9 @@
-# Word Wise 2026.07.1-rc1.4.0
+# Word Wise 2026.07.1-rc1.4.1
+
+## OTA allow-list hotfix
+
+RC1.4.1 sửa lỗi RC1.4.0 khiến updater từ chối database bundle hợp lệ vì bundle có thêm file bắt buộc `WIKTIONARY_ATTRIBUTION.md`. Allow-list hiện cho phép đúng file attribution này, vẫn yêu cầu file xuất hiện và tiếp tục từ chối mọi file ngoài danh sách. Nội dung database, gloss, phrase và hybrid difficulty không thay đổi.
+
 
 ## Database expansion and hybrid difficulty
 

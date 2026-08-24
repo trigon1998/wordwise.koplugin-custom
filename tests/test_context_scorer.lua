@@ -50,4 +50,4 @@ if fallback_kind ~= "primary" or fallback_score ~= 0
     error("context fallback mismatch")
 end
 
-print("RC1.4.0 context scorer tests: PASS")
+print("RC1.4.1 context scorer tests: PASS")

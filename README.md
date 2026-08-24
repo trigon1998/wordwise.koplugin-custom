@@ -19,7 +19,7 @@ nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn
 xác định chính xác từ đang được giải thích mà không cần rời khỏi trang sách để
 mở từ điển.
 
-**Phiên bản candidate hiện tại:** `2026.07.1-rc1.4.0`
+**Phiên bản candidate hiện tại:** `2026.07.1-rc1.4.1`
 **Kênh cập nhật:** bản thử nghiệm RC
 
 ## Tính năng nổi bật
@@ -295,9 +295,9 @@ GitHub Personal Access Token trên thiết bị đọc sách.
 
 [![Lịch sử lượt tải plugin ZIP](stats/downloads.svg)](stats/downloads.json)
 
-## Phiên bản candidate hiện tại: RC1.4.0
+## Phiên bản candidate hiện tại: RC1.4.1
 
-RC1.4.0 giữ cơ chế **top-edge hint fallback** của RC1.3.6 và cơ chế chọn gloss theo ngữ cảnh của RC1.3.9. Với các entry có sense2 đã được review, plugin chấm riêng keyword của sense primary và alternate trong cửa sổ context ±10 token; alternate chỉ thắng khi điểm cao hơn nghiêm ngặt và lớn hơn 0. Khi hòa hoặc không có evidence, plugin giữ primary để tránh thay đổi không chắc chắn.
+RC1.4.1 giữ cơ chế **top-edge hint fallback** của RC1.3.6 và cơ chế chọn gloss theo ngữ cảnh của RC1.3.9. Với các entry có sense2 đã được review, plugin chấm riêng keyword của sense primary và alternate trong cửa sổ context ±10 token; alternate chỉ thắng khi điểm cao hơn nghiêm ngặt và lớn hơn 0. Khi hòa hoặc không có evidence, plugin giữ primary để tránh thay đổi không chắc chắn.
 
 Database General trong candidate này bổ sung **538 gloss Việt** có source Wiktionary và **92 phrase/collocation** đã được chọn lọc; số entry có gloss Việt tăng từ 48 lên 678, phrase tăng từ 0 lên 92. Economics và Physics giữ nguyên gloss/domain data hiện có, không nhận nhầm General gloss chỉ vì trùng term. Ba database dùng hybrid `min(CEFR difficulty, frequency difficulty)` với wordfreq 3.1.1, lemma normalization, phrase-conservative policy và CEFR fallback khi Zipf bằng 0. Không có bản dịch Việt mới nào được mô hình tự sinh.
 
@@ -314,7 +314,7 @@ Thứ tự ưu tiên khi đặt hint:
 
 Renderer vẫn giữ khoảng cách dòng tự động 180%, font-level metrics, giới hạn
 
-theo cột văn bản và kiểm tra va chạm giữa các hint. Database schema v3 thêm cột context cho sense2; runtime vẫn tự động fallback để đọc schema v2 của các database cũ. Bản Full OTA RC1.4.0 sẽ cập nhật plugin cùng ba database để version và metadata luôn khớp, đồng thời không đụng tới `known_words.db`, sidecar hay tiến độ đọc.
+theo cột văn bản và kiểm tra va chạm giữa các hint. Database schema v3 thêm cột context cho sense2; runtime vẫn tự động fallback để đọc schema v2 của các database cũ. Bản Full OTA RC1.4.1 sẽ cập nhật plugin cùng ba database để version và metadata luôn khớp, đồng thời không đụng tới `known_words.db`, sidecar hay tiến độ đọc.
 
 Xem trang [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
 để tải file, kiểm tra checksum và đọc ghi chú phát hành.
@@ -345,7 +345,7 @@ Các bản sao lưu nằm trong thư mục cập nhật Word Wise của KOReader
 
 ### Khoảng cách dòng quá rộng
 
-RC1.4.0 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
+RC1.4.1 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
 cho hint. Tắt tự động điều chỉnh khoảng cách hoặc tắt Word Wise để khôi phục
 khoảng cách dòng ban đầu đã được ghi nhớ.
 

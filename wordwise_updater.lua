@@ -89,6 +89,7 @@ end
 local DATA_AUXILIARY_FILES = {
     ["manifest.json"] = "manifest.json",
     ["WordWise_Databases_README.txt"] = "README.txt",
+    ["WIKTIONARY_ATTRIBUTION.md"] = "WIKTIONARY_ATTRIBUTION.md",
 }
 
 local DATA_ALLOWED_DIRECTORIES = {
