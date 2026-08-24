@@ -2,10 +2,16 @@
 local SQ3 = require("lua-ljsqlite3/init")
 local logger = require("logger")
 
-local ENTRY_SQL = [[
+local ENTRY_SQL_LEGACY = [[
 SELECT term, lemma, short_en, short_vi, difficulty, pos, domain,
        sense2_en, sense2_vi, context_keywords, phrase_len, priority,
        requires_context, register_label
+FROM entries WHERE term = ?1 COLLATE NOCASE LIMIT 1;
+]]
+local ENTRY_SQL_WITH_SENSE_CONTEXT = [[
+SELECT term, lemma, short_en, short_vi, difficulty, pos, domain,
+       sense2_en, sense2_vi, context_keywords, sense2_context_keywords,
+       phrase_len, priority, requires_context, register_label
 FROM entries WHERE term = ?1 COLLATE NOCASE LIMIT 1;
 ]]
 local ALIAS_SQL = [[
@@ -128,16 +134,25 @@ local function pos_matches(entry, allowed_pos)
     return false
 end
 
-local function row_to_entry(row)
+local function row_to_entry(row, has_sense_context)
     if not row then return nil end
+    local sense2_context_keywords
+    local phrase_index, priority_index, requires_index, register_index = 11, 12, 13, 14
+    if has_sense_context then
+        sense2_context_keywords = row[11]
+        phrase_index, priority_index, requires_index, register_index = 12, 13, 14, 15
+    end
     return {
         term = row[1], key = row[2] or row[1], lemma = row[2] or row[1],
         short_en = trim(row[3]), short_vi = trim(row[4]),
         difficulty = tonumber(row[5]) or 1, pos = trim(row[6]),
         domain = row[7] or "general", sense2_en = trim(row[8]),
         sense2_vi = trim(row[9]), context_keywords = trim(row[10]),
-        phrase_len = tonumber(row[11]) or 1, priority = tonumber(row[12]) or 50,
-        requires_context = tonumber(row[13]) or 0, register_label = trim(row[14]),
+        sense2_context_keywords = trim(sense2_context_keywords),
+        phrase_len = tonumber(row[phrase_index]) or 1,
+        priority = tonumber(row[priority_index]) or 50,
+        requires_context = tonumber(row[requires_index]) or 0,
+        register_label = trim(row[register_index]),
     }
 end
 
@@ -149,7 +164,17 @@ function WordWiseDB.open(path)
     end
     local self = setmetatable({ conn = conn, cache = {}, cache_count = 0, path = path }, WordWiseDB)
     local ok2, err = pcall(function()
-        self.entry_stmt = conn:prepare(ENTRY_SQL)
+        local probe_ok, probe = pcall(function()
+            return conn:prepare("SELECT sense2_context_keywords FROM entries LIMIT 0;")
+        end)
+        if probe_ok and probe then
+            pcall(function() probe:close() end)
+            self.has_sense_context = true
+        else
+            self.has_sense_context = false
+        end
+        self.entry_stmt = conn:prepare(self.has_sense_context
+            and ENTRY_SQL_WITH_SENSE_CONTEXT or ENTRY_SQL_LEGACY)
         self.alias_stmt = conn:prepare(ALIAS_SQL)
         self.irregular_stmt = conn:prepare(IRREGULAR_SQL)
         self.meta_stmt = conn:prepare(META_SQL)
@@ -233,7 +258,7 @@ function WordWiseDB:_entry(term)
     local ok, err = pcall(function()
         self.entry_stmt:reset():clearbind()
         self.entry_stmt:bind(term)
-        result = row_to_entry(self.entry_stmt:step())
+        result = row_to_entry(self.entry_stmt:step(), self.has_sense_context)
         self.entry_stmt:clearbind():reset()
     end)
     if not ok then

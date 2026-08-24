@@ -108,6 +108,17 @@ local DATABASE_SCHEMA_COLUMNS = {
     metadata = { "key", "value" },
 }
 
+local DATABASE_SCHEMA_ALTERNATIVES = {
+    entries = {
+        DATABASE_SCHEMA_COLUMNS.entries,
+        {
+            "term", "lemma", "short_en", "short_vi", "difficulty", "pos", "domain",
+            "sense2_en", "sense2_vi", "context_keywords", "phrase_len", "priority",
+            "requires_context", "register_label", "source", "sense2_context_keywords",
+        },
+    },
+}
+
 local function trim(text)
     return tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
 end
@@ -790,10 +801,21 @@ local function validate_database_columns(connection)
             actual[#actual + 1] = tostring(row[2] or "")
         end
         statement:close()
-        if #actual ~= #expected then return false, "schema mismatch: " .. table_name end
-        for index, name in ipairs(expected) do
-            if actual[index] ~= name then return false, "schema mismatch: " .. table_name end
+        local variants = DATABASE_SCHEMA_ALTERNATIVES[table_name] or { expected }
+        local matches = false
+        for _, variant in ipairs(variants) do
+            if #actual == #variant then
+                matches = true
+                for index, name in ipairs(variant) do
+                    if actual[index] ~= name then
+                        matches = false
+                        break
+                    end
+                end
+                if matches then break end
+            end
         end
+        if not matches then return false, "schema mismatch: " .. table_name end
     end
     return true
 end

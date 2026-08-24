@@ -648,12 +648,16 @@ function WordWise:combinedBox(records, first, last)
     return { x = box.x, y = box.y, w = box.w, h = box.h }
 end
 
-function WordWise:makeHint(entry, surface, records, first, last, confidence)
-    local gloss = bilingual_gloss(entry.short_en, entry.short_vi)
+function WordWise:makeHint(entry, surface, records, first, last, confidence, selected, sense_kind)
+    local selected_short_en = selected and selected.short_en or entry.short_en
+    local selected_short_vi = selected and selected.short_vi or entry.short_vi
+    local gloss = bilingual_gloss(selected_short_en, selected_short_vi)
     return {
         text = gloss, surface = surface, lemma = entry.lemma or entry.term,
-        short_en = entry.short_en, short_vi = entry.short_vi,
+        short_en = selected_short_en, short_vi = selected_short_vi,
+        primary_short_en = entry.short_en, primary_short_vi = entry.short_vi,
         sense2_en = entry.sense2_en, sense2_vi = entry.sense2_vi,
+        selected_sense = sense_kind or "primary",
         pos = entry.pos, domain = entry.domain, register_label = entry.register_label,
         difficulty = entry.difficulty, phrase_len = entry.phrase_len or (last - first + 1),
         priority = entry.priority or 50, confidence = confidence or 0,
@@ -762,16 +766,17 @@ function WordWise:computePageHints()
                 if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
                     local context_words, context_set =
                         prepared_context(i, i + length - 1)
-                    local accepted, confidence
+                    local accepted, confidence, selected, sense_kind
                     if ContextScorer.acceptPrepared then
-                        accepted, confidence =
+                        accepted, confidence, selected, sense_kind =
                             ContextScorer.acceptPrepared(entry, context_set)
                     else
-                        accepted, confidence =
+                        accepted, confidence, selected, sense_kind =
                             ContextScorer.accept(entry, context_words)
                     end
                     if accepted then
-                        matched = self:makeHint(entry, phrase, records, i, i + length - 1, confidence)
+                        matched = self:makeHint(entry, phrase, records, i, i + length - 1,
+                            confidence, selected, sense_kind)
                         consumed = length
                         break
                     end
@@ -792,15 +797,18 @@ function WordWise:computePageHints()
                         and ((self.proper_names and self.proper_names[lower]) or repeated_capitalized)
                     if not looks_like_name then
                         local context_words, context_set = prepared_context(i, i)
-                        local accepted, confidence
+                        local accepted, confidence, selected, sense_kind
                         if ContextScorer.acceptPrepared then
-                            accepted, confidence =
+                            accepted, confidence, selected, sense_kind =
                                 ContextScorer.acceptPrepared(entry, context_set)
                         else
-                            accepted, confidence =
+                            accepted, confidence, selected, sense_kind =
                                 ContextScorer.accept(entry, context_words)
                         end
-                        if accepted then matched = self:makeHint(entry, record.surface, records, i, i, confidence) end
+                        if accepted then
+                            matched = self:makeHint(entry, record.surface, records, i, i,
+                                confidence, selected, sense_kind)
+                        end
                     end
                 end
             end
@@ -1190,10 +1198,16 @@ function WordWise:showHintPopup(hint)
     }
     if hint.pos and hint.pos ~= "other" then lines[#lines + 1] = "Part of speech: " .. hint.pos end
     if hint.register_label then lines[#lines + 1] = "Register: " .. hint.register_label end
-    if hint.sense2_en then
+    local other_en, other_vi
+    if hint.selected_sense == "alternate" then
+        other_en, other_vi = hint.primary_short_en, hint.primary_short_vi
+    else
+        other_en, other_vi = hint.sense2_en, hint.sense2_vi
+    end
+    if other_en and other_en ~= "" then
         lines[#lines + 1] = ""
         lines[#lines + 1] = "Other possible sense: "
-            .. bilingual_gloss(hint.sense2_en, hint.sense2_vi)
+            .. bilingual_gloss(other_en, other_vi)
     end
     if hint.context and hint.context ~= "" then
         lines[#lines + 1] = ""

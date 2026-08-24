@@ -276,6 +276,20 @@ phrase_records[1].box.x = 2
 matcher:computePageHints()
 assert(exact_lookups > first_pass_lookups, "changed coordinates must bypass the stale page cache")
 
+local selected_hint = matcher:makeHint({
+    term = "capital", lemma = "capital", short_en = "wealth used in business",
+    short_vi = "vốn", sense2_en = "city where government sits", sense2_vi = "thủ đô",
+    domain = "economics", difficulty = 1,
+}, "capital", phrase_records, 1, 1, 0.8, {
+    short_en = "city where government sits", short_vi = "thủ đô",
+}, "alternate")
+assert_equal(selected_hint.text, "city where government sits · thủ đô",
+    "context-selected alternate gloss must be rendered")
+assert_equal(selected_hint.selected_sense, "alternate",
+    "selected sense metadata must be retained")
+assert_equal(selected_hint.primary_short_en, "wealth used in business",
+    "primary gloss must remain available for the popup alternative")
+
 local plain_records = {}
 for index = 1, 80 do
     plain_records[index] = {
@@ -349,8 +363,8 @@ matcher.render_stats = {
     top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.8"),
-    "diagnostics must expose the RC1.3.8 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1%-rc1%.3%.9"),
+    "diagnostics must expose the RC1.3.9 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
@@ -365,4 +379,4 @@ assert(diagnostics:find(
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.3.8 main behavior tests: PASS")
+print("RC1.3.9 main behavior tests: PASS")

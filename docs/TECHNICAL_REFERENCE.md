@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.8`.
+Current plugin version: `2026.07.1-rc1.3.9`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -37,6 +37,16 @@ repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
 
+## RC1.3.9 Context-Aware Sense/Gloss Selection
+
+RC1.3.9 completes the context-aware behavior that earlier releases only applied at candidate filtering/ranking level. `main.lua` now passes the prepared ±10-token context to `ContextScorer.acceptPrepared()`, captures the selected gloss and sense kind, and renders that selected English/Vietnamese pair. The popup preserves the primary and alternate glosses and labels the non-selected one as the other possible sense.
+
+`context_scorer.lua` scores primary `context_keywords` and reviewed alternate `sense2_context_keywords` independently. An alternate sense wins only when it has a strict positive score greater than the primary score; ties, zero evidence, missing alternate metadata and legacy entries all remain on the primary gloss. Required-context entries still fail closed when neither sense has evidence.
+
+The database runtime probes for `sense2_context_keywords` and explicitly selects either the schema-v3 column or the legacy schema-v2 query. The updater accepts both physical entries layouts, while new candidate databases use schema version 3 with the append-only column. The data package contains 83 reviewed mappings: 28 Economics and 55 Physics. The mapping file records domain, POS, the already-reviewed alternate English/Vietnamese gloss, context keywords and a review note; no Vietnamese translation is generated automatically.
+
+The behavior is covered by context scorer tests for primary/alternate/tie/zero fallback, main tests for rendering a selected alternate gloss, database tests for schema-aware prepared statements, and the existing updater/full-archive checks.
+
 ## RC1.3.8 Performance OTA and RC1.3.7 CEFR-A Database Update
 
 RC1.3.8 keeps the RC1.3.6 top-edge fallback: difficult words at the physical
@@ -56,10 +66,7 @@ while number/ordinal tokens and entries without sufficient CEFR evidence are
 excluded. Runtime difficulty maps A1 to 5, A2 to 4, B1 to 3, B2 to 2, and C1/C2
 to 1 because the plugin schema has five buckets.
 
-The candidate contains 25,403 General entries, 25,649 Economics entries and
-25,620 Physics entries. It retains the existing reviewed Vietnamese glosses
-(48, 348 and 352 respectively) and does not generate new translations. RC1.3.8 also adds bounded visible-page/token caches, prepared context scoring, and bounded gloss-width measurement caches. The full four-asset OTA contract remains synchronized at `2026.07.1-rc1.3.8`; the
-SQLite metadata, manifest counts and checksums are verified before release.
+The candidate contains 25,403 General entries, 25,649 Economics entries and 25,620 Physics entries. It retains the existing reviewed Vietnamese glosses (48, 348 and 352 respectively) and does not generate new translations. RC1.3.8 also adds bounded visible-page/token caches, prepared context scoring, and bounded gloss-width measurement caches. The RC1.3.9 full four-asset OTA contract is synchronized at `2026.07.1-rc1.3.9`; the SQLite metadata, manifest counts and checksums are verified before release.
 
 ## RC1.3.5 Upstream-Style Hint Renderer OTA Test
 

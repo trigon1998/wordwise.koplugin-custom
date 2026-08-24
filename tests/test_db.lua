@@ -72,9 +72,11 @@ end
 
 local db, err = WordWiseDB.open("/tmp/wordwise-test.db")
 assert(db, err or "database fixture must open")
-assert_equal(#prepared_sql, 6,
+assert_equal(#prepared_sql, 7,
     "all repeated and one-shot SQL statements must be prepared once")
-assert(prepared_sql[3].sql:find("JOIN entries", 1, true),
+assert(prepared_sql[2].sql:find("sense2_context_keywords", 1, true),
+    "sense-aware entry lookup must include alternate context keywords")
+assert(prepared_sql[4].sql:find("JOIN entries", 1, true),
     "irregular lookup must reject mappings without a target entry")
 
 assert_lengths(db:getPhraseLengths("Earnings"), { 5, 3 },
@@ -91,10 +93,10 @@ db:getPhraseLengths("earnings")
 assert_equal(phrase_steps, steps_after_build,
     "phrase rows must be scanned only once per active database")
 
-assert(prepared_sql[5].closed and prepared_sql[6].closed,
+assert(prepared_sql[6].closed and prepared_sql[7].closed,
     "one-shot phrase statements must close after the compact index is built")
 
 db:close()
 assert(connection.closed, "closing Word Wise DB must close SQLite")
 
-print("RC1.3.5 database optimization tests: PASS")
+print("RC1.3.9 database and sense tests: PASS")

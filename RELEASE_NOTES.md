@@ -1,55 +1,40 @@
-# Word Wise 2026.07.1-rc1.3.8
+# Word Wise 2026.07.1-rc1.3.9
 
-## Performance OTA and CEFR-A Database Update
+## Context-Aware Sense/Gloss Selection
 
-RC1.3.8 keeps the top-edge hint fallback introduced in RC1.3.6, retains the CEFR-A database selection policy from RC1.3.7, and adds bounded runtime caches to reduce repeated page, context and text-measurement work.
+RC1.3.9 chuyển context awareness từ mức lọc/xếp hạng candidate sang **chọn sense và gloss thực sự**. Khi một database entry có sense2 đã được review, plugin chấm riêng keyword của sense primary và alternate trong cửa sổ context quanh candidate. Alternate chỉ được chọn khi có ít nhất một hit và điểm của alternate cao hơn nghiêm ngặt điểm primary; hòa, zero evidence, thiếu metadata hoặc database legacy đều giữ primary để bảo toàn hành vi ổn định.
 
-### Performance changes
+`main.lua` nhận selected gloss từ `ContextScorer.acceptPrepared()` và dùng cặp `short_en/short_vi` được chọn khi render hint. Popup vẫn giữ sense không được chọn dưới nhãn “Other possible sense”, giúp người đọc kiểm tra lựa chọn hiện tại thay vì bị giới hạn bởi nghĩa đầu tiên.
 
-- Caches visible page records by page and layout signature, including normalized token data and screen boxes.
-- Reuses prepared, normalized context sets across candidate scoring within one page scan.
-- Caches gloss width measurements by font and screen width with a bounded capacity.
-- Invalidates caches when the page, screen geometry, font or document state changes.
-- Exposes opt-in cache hit/miss counters in diagnostics for on-device measurement.
-- Adds regression coverage for prepared context scoring and repeated gloss measurement.
+### Data curation
 
-The implementation keeps the existing first-word phrase index and database lookup cache rather than adding a second candidate index without device-profile evidence.
+Database bundle có **83 mapping alternate-context được review**, gồm 28 Economics và 55 Physics; General hiện không có row sense2. File `data/sense_context_overrides.tsv` ghi term, domain, POS, gloss alternate English/Vietnamese đã tồn tại, keyword context và review note. Không có bản dịch tiếng Việt nào được tự động sinh trong thay đổi này.
 
-### Database changes
+Các database vẫn giữ chính sách CEFR-A của RC1.3.8: 25,403 General entries, 25,649 Economics entries và 25,620 Physics entries. Các token số/thứ tự và entry không có evidence CEFR đủ tốt tiếp tục bị loại theo pipeline hiện hành.
 
-- Uses CEFR-J Vocabulary Profile v1.5 and Octanove C1/C2 v1.0 as the primary CEFR sources.
-- Uses Words-CEFR-Dataset as a filtered lexical/POS fallback only; derived labels are not treated as human-reviewed translations.
-- Maps A1 → runtime difficulty 5, A2 → 4, B1 → 3, B2 → 2 and C1/C2 → 1.
-- Preserves existing manual/domain-curated overrides and reviewed Vietnamese glosses.
-- Excludes number/ordinal tokens and entries without sufficient lexical, POS or CEFR evidence.
-- Does not generate new Vietnamese translations automatically; unresolved translations remain English-only or quarantined according to the existing policy.
+### Schema and compatibility
 
-The database bundle contains 25,403 General entries, 25,649 Economics entries and 25,620 Physics entries. Reviewed Vietnamese gloss counts remain 48, 348 and 352 respectively.
+Database mới dùng schema version 3 với cột append-only `sense2_context_keywords`. Runtime probe schema khi mở database và chọn query phù hợp, nên vẫn đọc database schema version 2 của các bản cũ. Updater cũng chấp nhận cả hai layout của bảng `entries` trước khi staging database mới.
 
-### Renderer and updater
+Full OTA không bao gồm `known_words.db`, reading progress, book sidecars hoặc các dữ liệu người dùng khác. Cơ chế backup, checksum, manifest, SQLite integrity check và replacement khi restart được giữ nguyên.
 
-- Keeps normal above-word placement, top-edge clamping and below-word fallback with an upward caret.
-- Keeps automatic 180% line spacing and collision-safe placement.
-- Uses matching plugin/database build metadata `2026.07.1-rc1.3.8` so the Full OTA path can detect and install the matching code and data revision safely.
-- Preserves `known_words.db`, book sidecars, reading progress and other user data.
+### Performance and renderer
+
+Các bounded page/token caches, prepared context set, gloss-width cache, automatic 180% line spacing, top-edge fallback và collision-safe placement từ RC1.3.8 được giữ nguyên. Sense selection dùng context set đã chuẩn bị sẵn, tránh normalize lặp lại trong cùng một page scan.
 
 ### Verification
 
-The release candidate passed Lua parsing, main/context/database/updater behavior tests, sample data evaluation, plugin ZIP build and plugin checksum/allow-list verification. The database archive passed manifest, SHA-256, schema, metadata, row-count, SQLite integrity and archive allow-list verification. GitHub Actions CI passed for the performance commit before this release was created.
+RC1.3.9 đã được kiểm tra bằng Lua parse, main behavior tests, context scorer tests, database schema/cache tests, updater tests, candidate data validation, manifest/archive verification, SHA-256 verification và SQLite integrity checks. Regression coverage xác nhận primary/alternate selection, strict-win rule, tie/zero fallback, selected-gloss rendering và schema-aware lookup.
 
 ### Provenance
 
-CEFR-J: https://github.com/openlanguageprofiles/olp-en-cefrj
+CEFR-J Vocabulary Profile: <https://github.com/openlanguageprofiles/olp-en-cefrj>
 
-Octanove / Words-CEFR-Dataset: https://github.com/Maximax67/Words-CEFR-Dataset
-
-The database README retains the source and license notes required for review before public distribution.
-
-This is a prerelease for direct OTA validation. Please inspect hint selection and performance counters on representative books. Adjust the Hint Level if the new CEFR distribution is too dense or too sparse for a particular reading workflow.
-
-Known words, reading progress and per-book settings are preserved by the updater.
+Octanove / Words-CEFR-Dataset: <https://github.com/Maximax67/Words-CEFR-Dataset>
 
 ## Previous releases
+
+RC1.3.8 introduced bounded runtime caches and the CEFR-A database selection policy.
 
 RC1.3.7 introduced the CEFR-A database selection policy.
 
@@ -61,7 +46,7 @@ RC1.3.5 introduced the upstream-style renderer and automatic 180% interline spac
 
 The database bundle is distributed separately from the code-only repository source tree. Review the repository notice and the database README before publishing the assets.
 
-The release remains a prerelease until on-device validation confirms that the CEFR-A selection and performance changes match the intended reading experience.
+This is a prerelease for direct OTA and on-device context-selection validation. Please inspect representative Economics, Physics and General books. Known words, reading progress and per-book settings are preserved by the updater.
 
 ## References
 

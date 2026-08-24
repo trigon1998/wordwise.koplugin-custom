@@ -19,7 +19,7 @@ nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn
 xác định chính xác từ đang được giải thích mà không cần rời khỏi trang sách để
 mở từ điển.
 
-**Phiên bản hiện tại:** `2026.07.1-rc1.3.8`
+**Phiên bản hiện tại:** `2026.07.1-rc1.3.9`
 **Kênh cập nhật:** bản thử nghiệm RC
 
 ## Tính năng nổi bật
@@ -29,7 +29,7 @@ mở từ điển.
 | Giải nghĩa ngay trên trang | Hiển thị định nghĩa tiếng Anh ngắn và bản dịch tiếng Việt đã được rà soát |
 | Nhận diện cụm từ | Có thể nhận diện cụm từ dài tối đa 5 từ, không chỉ từng từ riêng lẻ |
 | Ba lĩnh vực | Cơ sở dữ liệu Tổng quát, Kinh tế và Vật lý |
-| Lọc theo ngữ cảnh | Dùng các từ xung quanh để hạn chế chọn nhầm nghĩa |
+| Chọn nghĩa theo ngữ cảnh | Dùng các từ xung quanh để chọn gloss primary/alternate phù hợp hơn; chỉ dùng alternate khi có evidence rõ hơn |
 | Từ đã biết | Cho phép ẩn những từ bạn đã biết và dùng chung danh sách này giữa các sách |
 | Dấu chỉ từ trực quan | Đường ngang và dấu mũi nhọn hướng xuống chỉ đúng từ đang được giải thích |
 | Cập nhật OTA đầy đủ | Cập nhật cả plugin và ba cơ sở dữ liệu ngay trong menu Word Wise |
@@ -196,7 +196,7 @@ một cuốn sách.
 
 ### 7. Khoảng cách dòng
 
-Để dành đủ không gian cho phần giải nghĩa phía trên từ, RC1.3.8 mặc định sử dụng:
+Để dành đủ không gian cho phần giải nghĩa phía trên từ, RC1.3.9 mặc định sử dụng:
 
 ```text
 Word Wise → Line spacing → Automatic
@@ -295,9 +295,11 @@ GitHub Personal Access Token trên thiết bị đọc sách.
 
 [![Lịch sử lượt tải plugin ZIP](stats/downloads.svg)](stats/downloads.json)
 
-## Phiên bản hiện tại: RC1.3.8
+## Phiên bản hiện tại: RC1.3.9
 
-RC1.3.8 giữ cơ chế **top-edge hint fallback** của RC1.3.6 và cập nhật lại ba database theo policy CEFR-A: ưu tiên CEFR-J/Octanove, dùng Words-CEFR làm fallback có lọc POS, giữ các override đã review, đồng thời loại token số/thứ tự và entry không có evidence CEFR đủ tốt.
+RC1.3.9 giữ cơ chế **top-edge hint fallback** của RC1.3.6 và cập nhật runtime để thật sự chọn gloss theo ngữ cảnh. Với các entry có sense2 đã được review, plugin chấm riêng keyword của sense primary và alternate trong cửa sổ context ±10 token; alternate chỉ thắng khi điểm cao hơn nghiêm ngặt và lớn hơn 0. Khi hòa hoặc không có evidence, plugin giữ primary để tránh thay đổi không chắc chắn.
+
+Ba database tiếp tục theo policy CEFR-A: ưu tiên CEFR-J/Octanove, dùng Words-CEFR làm fallback có lọc POS, giữ các override đã review, đồng thời loại token số/thứ tự và entry không có evidence CEFR đủ tốt. RC1.3.9 có 83 mapping alternate-context được review (28 Economics, 55 Physics); không tự động sinh bản dịch tiếng Việt.
 
 Thứ tự ưu tiên khi đặt hint:
 
@@ -309,7 +311,7 @@ Thứ tự ưu tiên khi đặt hint:
 4. chỉ ẩn hint khi cả hai vị trí đều không thể đặt an toàn trên màn hình.
 
 Renderer vẫn giữ khoảng cách dòng tự động 180%, font-level metrics, giới hạn
-theo cột văn bản và kiểm tra va chạm giữa các hint. Database từ điển trong RC1.3.8 đã được phân cấp lại theo CEFR và lọc nhiễu; bản Full OTA cập nhật plugin cùng ba database để version và metadata luôn khớp.
+theo cột văn bản và kiểm tra va chạm giữa các hint. Database schema v3 thêm cột context cho sense2; runtime vẫn tự động fallback để đọc schema v2 của các database cũ. Bản Full OTA cập nhật plugin cùng ba database để version và metadata luôn khớp, đồng thời không đụng tới `known_words.db`, sidecar hay tiến độ đọc.
 
 Xem trang [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
 để tải file, kiểm tra checksum và đọc ghi chú phát hành.
@@ -340,7 +342,7 @@ Các bản sao lưu nằm trong thư mục cập nhật Word Wise của KOReader
 
 ### Khoảng cách dòng quá rộng
 
-RC1.3.8 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
+RC1.3.9 chủ động dùng khoảng cách dòng tự động 180% để dành đủ vùng hiển thị
 cho hint. Tắt tự động điều chỉnh khoảng cách hoặc tắt Word Wise để khôi phục
 khoảng cách dòng ban đầu đã được ghi nhớ.
 
