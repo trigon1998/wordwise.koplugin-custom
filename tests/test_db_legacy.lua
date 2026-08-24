@@ -57,4 +57,4 @@ assert(entry.sense2_context_keywords == "city,government,nation,state",
     "schema-v2 side table must restore alternate keywords")
 db:close()
 
-print("RC1.4.3 legacy database compatibility tests: PASS")
+print("RC1.4.4 legacy database compatibility tests: PASS")

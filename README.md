@@ -19,7 +19,7 @@ nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn
 xác định chính xác từ đang được giải thích mà không cần rời khỏi trang sách để
 mở từ điển.
 
-**Phiên bản candidate hiện tại:** `2026.07.1-rc1.4.3`
+**Phiên bản candidate hiện tại:** `2026.07.1-rc1.4.4`
 **Kênh cập nhật:** bản thử nghiệm RC
 
 ## Tính năng nổi bật
@@ -295,13 +295,13 @@ GitHub Personal Access Token trên thiết bị đọc sách.
 
 [![Lịch sử lượt tải plugin ZIP](stats/downloads.svg)](stats/downloads.json)
 
-## Phiên bản candidate hiện tại: RC1.4.3
+## Phiên bản candidate hiện tại: RC1.4.4 Bridge
 
 RC1.4.3 giữ cơ chế **top-edge hint fallback** của RC1.3.6 và cơ chế chọn gloss theo ngữ cảnh của RC1.3.9. Với các entry có sense2 đã được review, plugin chấm riêng keyword của sense primary và alternate trong cửa sổ context ±10 token; alternate chỉ thắng khi điểm cao hơn nghiêm ngặt và lớn hơn 0. Khi hòa hoặc không có evidence, plugin giữ primary để tránh thay đổi không chắc chắn.
 
 Database General trong candidate này bổ sung **538 gloss Việt** có source Wiktionary và **92 phrase/collocation** đã được chọn lọc; số entry có gloss Việt tăng từ 48 lên 678, phrase tăng từ 0 lên 92. Economics và Physics giữ nguyên gloss/domain data hiện có, không nhận nhầm General gloss chỉ vì trùng term. Ba database dùng hybrid `min(CEFR difficulty, frequency difficulty)` với wordfreq 3.1.1, lemma normalization, phrase-conservative policy và CEFR fallback khi Zipf bằng 0. Không có bản dịch Việt mới nào được mô hình tự sinh.
 
-Nguồn Wiktionary được ghi per-term trong override TSV; attribution/share-alike notice nằm trong README và manifest của database bundle để tương thích trực tiếp với updater cũ. RC1.4.3 giữ allow-list legacy-safe, dùng database vật lý schema-v2 để updater cũ có thể kiểm tra và cài đặt trực tiếp, đồng thời updater mới vẫn chấp nhận schema-v2/schema-v3 và optional attribution file nếu gặp bundle cũ. Candidate vẫn cần được kiểm tra thực tế trước khi thay thế release công khai.
+Nguồn Wiktionary được ghi per-term trong override TSV; attribution/share-alike notice nằm trong README và manifest của database bundle để tương thích trực tiếp với updater cũ. RC1.4.4 là bridge updater code-only: giữ allow-list legacy-safe, quảng bá capability hỗ trợ schema-v2/schema-v3, tách validator theo layout, hỗ trợ cài code khi release chưa có data asset và lưu schema metadata trong pending/backup state. RC1.4.3 vẫn là database release schema-v2 dùng để bootstrap thiết bị cũ; các bundle schema-v3 tương lai chỉ được tải sau khi bridge đã cài và khởi động lại. Candidate vẫn cần được kiểm tra thực tế trước khi thay thế release công khai.
 
 Thứ tự ưu tiên khi đặt hint:
 
@@ -314,7 +314,7 @@ Thứ tự ưu tiên khi đặt hint:
 
 Renderer vẫn giữ khoảng cách dòng tự động 180%, font-level metrics, giới hạn
 
-theo cột văn bản và kiểm tra va chạm giữa các hint. Database schema v3 thêm cột context cho sense2; runtime vẫn tự động fallback để đọc schema v2 của các database cũ. Bản Full OTA RC1.4.3 sẽ cập nhật plugin cùng ba database để version và metadata luôn khớp, đồng thời không đụng tới `known_words.db`, sidecar hay tiến độ đọc.
+theo cột văn bản và kiểm tra va chạm giữa các hint. Database schema v3 thêm cột context cho sense2; runtime vẫn tự động fallback để đọc schema v2 của các database cũ. Bridge RC1.4.4 chỉ cập nhật plugin code; không tự thay thế database nếu release không có data asset. Database schema-v3 sẽ được phát hành sau khi bridge đã được cài thành công, đồng thời không đụng tới `known_words.db`, sidecar hay tiến độ đọc.
 
 Xem trang [Releases](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
 để tải file, kiểm tra checksum và đọc ghi chú phát hành.

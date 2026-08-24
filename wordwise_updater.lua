@@ -114,16 +114,33 @@ local DATABASE_SCHEMA_COLUMNS = {
     metadata = { "key", "value" },
 }
 
-local DATABASE_SCHEMA_ALTERNATIVES = {
-    entries = {
-        DATABASE_SCHEMA_COLUMNS.entries,
-        {
-            "term", "lemma", "short_en", "short_vi", "difficulty", "pos", "domain",
-            "sense2_en", "sense2_vi", "context_keywords", "phrase_len", "priority",
-            "requires_context", "register_label", "source", "sense2_context_keywords",
-        },
-    },
+local DATABASE_SCHEMA_V3_ENTRIES = {
+    "term", "lemma", "short_en", "short_vi", "difficulty", "pos", "domain",
+    "sense2_en", "sense2_vi", "context_keywords", "phrase_len", "priority",
+    "requires_context", "register_label", "source", "sense2_context_keywords",
 }
+
+local DATABASE_SCHEMA_LAYOUTS = {
+    [2] = { entries = DATABASE_SCHEMA_COLUMNS.entries },
+    [3] = { entries = DATABASE_SCHEMA_V3_ENTRIES },
+}
+
+local MAX_DATABASE_SCHEMA = 3
+local MIN_DATABASE_SCHEMA = 2
+function Updater.getCapabilities()
+    return {
+        database_schema_min = MIN_DATABASE_SCHEMA,
+        database_schema_max = MAX_DATABASE_SCHEMA,
+        code_only_bridge = true,
+        staged_data_migration = true,
+        rollback_metadata = true,
+    }
+end
+
+function Updater.supportsDatabaseSchema(schema_version)
+    local value = tonumber(schema_version)
+    return value ~= nil and value >= MIN_DATABASE_SCHEMA and value <= MAX_DATABASE_SCHEMA
+end
 
 local function trim(text)
     return tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -522,8 +539,10 @@ local function update_paths()
         staged_plugin = base .. "/stage/" .. Config.plugin_id,
         staged_data = base .. "/database-stage",
         staged_manifest = base .. "/database-stage/manifest.json",
+        pending_data_schema = base .. "/pending-database-schema.txt",
         backup = base .. "/backup",
         data_backup = base .. "/database-backup",
+        data_backup_schema = base .. "/database-backup/schema-version.txt",
         data_restore_rollback = base .. "/database-restore-rollback",
         installed_data_manifest = base .. "/installed-database-manifest.json",
         pending_data_version = base .. "/pending-database-version.txt",
@@ -733,16 +752,30 @@ function Updater.validateDataManifest(manifest, release_version_expected)
     if manifest.known_words_included ~= false or manifest.book_settings_included ~= false then
         return nil, "database package attempts to include user data"
     end
+    local database_schema = tonumber(manifest.database_schema or 2)
+    if not Updater.supportsDatabaseSchema(database_schema) then
+        return nil, "unsupported database schema in manifest"
+    end
+    local minimum_updater_schema = tonumber(manifest.minimum_updater_schema or database_schema)
+    if not minimum_updater_schema or minimum_updater_schema > MAX_DATABASE_SCHEMA
+        or minimum_updater_schema < MIN_DATABASE_SCHEMA then
+        return nil, "invalid minimum updater schema in manifest"
+    end
     if type(manifest.databases) ~= "table" or #manifest.databases ~= #DATA_FILES then
         return nil, "database manifest must describe exactly three databases"
     end
 
     local records = {}
+    records.__database_schema = database_schema
     for _, record in ipairs(manifest.databases) do
         if type(record) ~= "table" then return nil, "invalid database manifest record" end
         local spec = DATA_FILE_BY_ARCHIVE_PATH[tostring(record.archive_path or "")]
         if not spec or tostring(record.database_domain or "") ~= spec.domain then
             return nil, "database manifest path/domain mismatch"
+        end
+        if record.database_schema ~= nil
+            and tonumber(record.database_schema) ~= database_schema then
+            return nil, "database manifest schema mismatch"
         end
         if records[spec.name] then return nil, "duplicate database manifest record" end
         local hash = tostring(record.sha256 or "")
@@ -770,6 +803,7 @@ function Updater.validateDataManifest(manifest, release_version_expected)
         if type(record.translation_policy) ~= "string" or record.translation_policy == "" then
             return nil, "missing translation policy in database manifest"
         end
+        record.database_schema = database_schema
         records[spec.name] = record
     end
     for _, spec in ipairs(DATA_FILES) do
@@ -799,7 +833,9 @@ local function sql_first_value(connection, sql)
     return row and row[1] or nil
 end
 
-local function validate_database_columns(connection)
+local function validate_database_columns(connection, schema_version)
+    local layout = DATABASE_SCHEMA_LAYOUTS[tonumber(schema_version)]
+    if not layout then return false, "unsupported database schema" end
     for table_name, expected in pairs(DATABASE_SCHEMA_COLUMNS) do
         local statement = connection:prepare("PRAGMA table_info(" .. table_name .. ");")
         local actual = {}
@@ -809,7 +845,8 @@ local function validate_database_columns(connection)
             actual[#actual + 1] = tostring(row[2] or "")
         end
         statement:close()
-        local variants = DATABASE_SCHEMA_ALTERNATIVES[table_name] or { expected }
+        local expected_columns = layout[table_name] or expected
+        local variants = { expected_columns }
         local matches = false
         for _, variant in ipairs(variants) do
             if #actual == #variant then
@@ -828,6 +865,29 @@ local function validate_database_columns(connection)
     return true
 end
 
+local function validate_database_objects(connection, schema_version)
+    local allowed_tables = {
+        entries = true, aliases = true, irregular_forms = true, metadata = true,
+    }
+    if tonumber(schema_version) == 2 then allowed_tables.sense2_context = true end
+    local allowed_indexes = { idx_entries_phrase = true }
+    local statement = connection:prepare(
+        "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';")
+    while true do
+        local row = statement:step()
+        if not row then break end
+        local kind, name = tostring(row[1] or ""), tostring(row[2] or "")
+        local allowed = (kind == "table" and allowed_tables[name])
+            or (kind == "index" and allowed_indexes[name])
+        if not allowed then
+            statement:close()
+            return false, "unexpected database object: " .. kind .. ":" .. name
+        end
+    end
+    statement:close()
+    return true
+end
+
 local function validate_sqlite_database(path, spec, version, record, verify_counts)
     local ok_sq3, SQ3 = pcall(require, "lua-ljsqlite3/init")
     if not ok_sq3 or not SQ3 or not SQ3.open then return false, "SQLite unavailable" end
@@ -842,19 +902,28 @@ local function validate_sqlite_database(path, spec, version, record, verify_coun
         if sql_first_value(connection, "PRAGMA foreign_key_check;") ~= nil then
             error("SQLite foreign-key check failed")
         end
-        local columns_ok, columns_err = validate_database_columns(connection)
-        if not columns_ok then error(columns_err) end
         local build = sql_first_value(connection,
             "SELECT value FROM metadata WHERE key='build_version' LIMIT 1;")
         local domain = sql_first_value(connection,
             "SELECT value FROM metadata WHERE key='database_domain' LIMIT 1;")
         local schema = sql_first_value(connection,
             "SELECT value FROM metadata WHERE key='schema_version' LIMIT 1;")
+        local schema_number = tonumber(schema)
+        if not Updater.supportsDatabaseSchema(schema_number) then
+            error("unsupported database schema")
+        end
+        if record and record.database_schema
+            and tonumber(record.database_schema) ~= schema_number then
+            error("manifest and database schema do not match")
+        end
+        local columns_ok, columns_err = validate_database_columns(connection, schema_number)
+        if not columns_ok then error(columns_err) end
+        local objects_ok, objects_err = validate_database_objects(connection, schema_number)
+        if not objects_ok then error(objects_err) end
         local policy = sql_first_value(connection,
             "SELECT value FROM metadata WHERE key='translation_policy' LIMIT 1;")
         if tostring(build or "") ~= tostring(version) then error("database build version mismatch") end
         if tostring(domain or "") ~= spec.domain then error("database domain mismatch") end
-        if tostring(schema or "") ~= "2" then error("unsupported database schema") end
         if record and tostring(policy or "") ~= tostring(record.translation_policy) then
             error("database translation policy mismatch")
         end
@@ -900,7 +969,7 @@ local function validate_data_directory(directory, manifest_path, version)
             path, spec, version, record, true)
         if not valid then return false, database_err end
     end
-    return true
+    return true, records.__database_schema
 end
 
 local function validate_staged_data(paths, version)
@@ -955,10 +1024,32 @@ local function database_build_version(path, expected_domain)
                 "SELECT value FROM metadata WHERE key='schema_version' LIMIT 1;")
     end)
     pcall(function() connection:close() end)
-    if not ok or tostring(domain or "") ~= expected_domain or tostring(schema or "") ~= "2" then
+    if not ok or tostring(domain or "") ~= expected_domain
+        or not Updater.supportsDatabaseSchema(schema) then
         return nil
     end
     return trim(build)
+end
+
+local function database_schema_version(path, expected_domain)
+    if lfs.attributes(path, "mode") ~= "file" then return nil end
+    local ok_sq3, SQ3 = pcall(require, "lua-ljsqlite3/init")
+    if not ok_sq3 or not SQ3 or not SQ3.open then return nil end
+    local ok_open, connection = pcall(SQ3.open, path)
+    if not ok_open or not connection then return nil end
+    local ok, domain, schema = pcall(function()
+        connection:exec("PRAGMA query_only = ON;")
+        return sql_first_value(connection,
+                "SELECT value FROM metadata WHERE key='database_domain' LIMIT 1;"),
+            sql_first_value(connection,
+                "SELECT value FROM metadata WHERE key='schema_version' LIMIT 1;")
+    end)
+    pcall(function() connection:close() end)
+    if not ok or tostring(domain or "") ~= expected_domain
+        or not Updater.supportsDatabaseSchema(schema) then
+        return nil
+    end
+    return tonumber(schema)
 end
 
 local function detect_database_bundle_version(paths)
@@ -968,6 +1059,17 @@ local function detect_database_bundle_version(paths)
         if not version or version == "" then return nil end
         if common and common ~= version then return nil end
         common = version
+    end
+    return common
+end
+
+local function detect_database_schema(paths)
+    local common
+    for _, spec in ipairs(DATA_FILES) do
+        local schema = database_schema_version(paths.databases .. "/" .. spec.name, spec.domain)
+        if not schema then return nil end
+        if common and common ~= schema then return nil end
+        common = schema
     end
     return common
 end
@@ -1010,6 +1112,10 @@ local function read_data_backup_version(paths)
     return read_first_line(paths.data_backup .. "/backup_version.txt")
 end
 
+local function read_data_backup_schema(paths)
+    return tonumber(read_first_line(paths.data_backup_schema) or "")
+end
+
 local function read_missing_database_set(paths)
     local missing = {}
     local file = io.open(paths.data_backup .. "/missing_databases.txt", "rb")
@@ -1047,7 +1153,10 @@ local function backup_current_databases(paths)
 
     local previous = Updater.getInstalledDatabaseBundleVersion()
         or detect_database_bundle_version(paths) or "unknown"
-    return atomic_write_text(paths.data_backup .. "/backup_version.txt", previous .. "\n")
+    local schema = detect_database_schema(paths) or 2
+    local version_ok = atomic_write_text(paths.data_backup .. "/backup_version.txt", previous .. "\n")
+    if not version_ok then return false end
+    return atomic_write_text(paths.data_backup_schema, tostring(schema) .. "\n")
 end
 
 local function restore_database_backup(paths)
@@ -1078,12 +1187,15 @@ end
 
 local function discard_pending_data(paths)
     pcall(os.remove, paths.pending_data_version)
+    pcall(os.remove, paths.pending_data_schema)
     pcall(os.remove, paths.data_install_state)
     if lfs.attributes(paths.staged_data, "mode") then pcall(clear_tree, paths.staged_data) end
 end
 
-local function mark_pending_data(paths, version)
-    return atomic_write_text(paths.pending_data_version, tostring(version) .. "\n")
+local function mark_pending_data(paths, version, schema_version)
+    local ok, err = atomic_write_text(paths.pending_data_version, tostring(version) .. "\n")
+    if not ok then return false, err end
+    return atomic_write_text(paths.pending_data_schema, tostring(schema_version or 2) .. "\n")
 end
 
 function Updater.applyPendingDataUpdate()
@@ -1098,10 +1210,15 @@ function Updater.applyPendingDataUpdate()
 
     local version = pending_data_version(paths)
     if not version then return true, nil end
-    local valid, err = validate_staged_data(paths, version)
+    local valid, err, staged_schema = validate_staged_data(paths, version)
     if not valid then
         discard_pending_data(paths)
         return false, "pending database update was rejected: " .. tostring(err)
+    end
+    local pending_schema = tonumber(read_first_line(paths.pending_data_schema) or "")
+    if pending_schema and pending_schema ~= staged_schema then
+        discard_pending_data(paths)
+        return false, "pending database schema state does not match its manifest"
     end
     if not ensure_directory(paths.wordwise) or not ensure_directory(paths.databases) then
         return false, "cannot create Word Wise database directory"
@@ -1247,14 +1364,17 @@ end
 local function install_release(release, data_only)
     local version = release_version(release)
     local assets = Updater.releaseAssets(release)
-    if not assets.has_data or (not data_only and not assets.has_code) then
-        show_error(_("The release is missing a required code/database ZIP or SHA-256 file."))
+    local can_install_code = not data_only and assets.has_code
+    local can_install_data = data_only and assets.has_data
+    if not can_install_code and not can_install_data then
+        show_error(_("The release is missing the required code or database ZIP and SHA-256 files."))
         return
     end
 
     UIManager:show(InfoMessage:new{
         text = data_only and _("Downloading Word Wise database update...")
-            or _("Downloading Word Wise code and databases..."),
+            or (assets.has_data and _("Downloading Word Wise code and databases...")
+                or _("Downloading Word Wise code bridge...")),
         timeout = 1,
     })
     UIManager:scheduleIn(0.1, function()
@@ -1278,21 +1398,24 @@ local function install_release(release, data_only)
             if not ok then cleanup_downloads(paths, false) show_error(err) return end
         end
 
-        ok, err = download_file(
-            assets.data_url, paths.data_archive, Config.max_data_archive_bytes)
-        if not ok then cleanup_downloads(paths, false) show_error(err) return end
-        ok, err = download_file(
-            assets.data_checksum_url, paths.data_checksum, Config.max_data_metadata_bytes)
-        if not ok then cleanup_downloads(paths, false) show_error(err) return end
-        ok, err = verify_downloaded_archive(
-            paths.data_archive, paths.data_checksum, assets.data_name)
-        if not ok then cleanup_downloads(paths, false) show_error(err) return end
-        ok, err = extract_data_release(paths.data_archive, paths.staged_data)
-        if not ok then cleanup_downloads(paths, false) show_error(err) return end
-        ok, err = validate_staged_data(paths, version)
-        if not ok then cleanup_downloads(paths, false) show_error(err) return end
-        ok, err = mark_pending_data(paths, version)
-        if not ok then cleanup_downloads(paths, false) show_error(err) return end
+        local staged_data_schema
+        if assets.has_data then
+            ok, err = download_file(
+                assets.data_url, paths.data_archive, Config.max_data_archive_bytes)
+            if not ok then cleanup_downloads(paths, false) show_error(err) return end
+            ok, err = download_file(
+                assets.data_checksum_url, paths.data_checksum, Config.max_data_metadata_bytes)
+            if not ok then cleanup_downloads(paths, false) show_error(err) return end
+            ok, err = verify_downloaded_archive(
+                paths.data_archive, paths.data_checksum, assets.data_name)
+            if not ok then cleanup_downloads(paths, false) show_error(err) return end
+            ok, err = extract_data_release(paths.data_archive, paths.staged_data)
+            if not ok then cleanup_downloads(paths, false) show_error(err) return end
+            ok, err, staged_data_schema = validate_staged_data(paths, version)
+            if not ok then cleanup_downloads(paths, false) show_error(err) return end
+            ok, err = mark_pending_data(paths, version, staged_data_schema)
+            if not ok then cleanup_downloads(paths, false) show_error(err) return end
+        end
 
         if not data_only then
             ok, err = commit_staged_release(paths, extracted)
@@ -1303,7 +1426,9 @@ local function install_release(release, data_only)
         UIManager:show(ConfirmBox:new{
             text = (data_only
                     and _("Word Wise databases are verified and ready for v")
-                    or _("Word Wise code and databases are verified and ready for v"))
+                    or (assets.has_data
+                        and _("Word Wise code and databases are verified and ready for v")
+                        or _("Word Wise code bridge is verified and ready for v")))
                 .. version .. ".\n\n" .. _("Restart KOReader to finish the update now?"),
             ok_text = _("Restart"),
             ok_callback = function() UIManager:restartKOReader() end,
@@ -1380,9 +1505,11 @@ function Updater.check()
                 end
             end
             local assets = Updater.releaseAssets(release)
-            if not assets.complete then
+            local installable = (data_only and assets.has_data)
+                or (not data_only and assets.has_code)
+            if not installable then
                 offer_releases_page(repository,
-                    _("The newest release does not contain all four code/database update assets."))
+                    _("The selected release does not contain the required verified update assets."))
                 return
             end
 
@@ -1404,7 +1531,9 @@ function Updater.check()
                             callback = function() UIManager:close(viewer) end,
                         },
                         {
-                            text = data_only and _("Update databases") or _("Update all and restart"),
+                            text = data_only and _("Update databases")
+                                or (assets.has_data and _("Update all and restart")
+                                    or _("Install code bridge and restart")),
                             callback = function()
                                 UIManager:close(viewer)
                                 install_release(release, data_only)
@@ -1484,16 +1613,30 @@ function Updater.restorePreviousVersion()
             if data_version then
                 if data_version ~= "unknown" and data_version ~= "mixed" then
                     local missing = read_missing_database_set(paths)
+                    local backup_schema = read_data_backup_schema(paths)
+                    local detected_schema
                     for _, spec in ipairs(DATA_FILES) do
                         local backup = paths.data_backup .. "/" .. spec.name
                         if lfs.attributes(backup, "mode") == "file" then
                             local valid, validation_err = validate_sqlite_database(
                                 backup, spec, data_version, nil, false)
                             if not valid then show_error(validation_err) return end
+                            local schema = database_schema_version(backup, spec.domain)
+                            if not schema then show_error(_("Cannot identify database backup schema.")) return end
+                            if backup_schema and schema ~= backup_schema then
+                                show_error(_("Database backup schemas do not match.")) return
+                            end
+                            detected_schema = detected_schema or schema
+                            if detected_schema ~= schema then
+                                show_error(_("Database backup schemas do not match.")) return
+                            end
                         elseif not missing[spec.name] then
                             show_error(_("Database backup is incomplete: ") .. spec.name)
                             return
                         end
+                    end
+                    if backup_schema and detected_schema and backup_schema ~= detected_schema then
+                        show_error(_("Database backup schema metadata is invalid.")) return
                     end
                 end
                 local ok, err = reset_directory(paths.data_restore_rollback)

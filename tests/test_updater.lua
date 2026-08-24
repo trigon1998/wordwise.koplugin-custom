@@ -40,10 +40,26 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.3",
+assert_equal(metadata.version, "2026.07.1-rc1.4.4",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
+
+local capabilities = Updater.getCapabilities()
+assert_equal(capabilities.database_schema_min, 2,
+    "updater must advertise schema-v2 compatibility")
+assert_equal(capabilities.database_schema_max, 3,
+    "updater must advertise schema-v3 compatibility")
+assert_equal(capabilities.code_only_bridge, true,
+    "updater must advertise code-only bridge support")
+assert_equal(Updater.supportsDatabaseSchema(2), true,
+    "schema-v2 must be supported")
+assert_equal(Updater.supportsDatabaseSchema(3), true,
+    "schema-v3 must be supported")
+assert_equal(Updater.supportsDatabaseSchema(1), false,
+    "unsupported old schema must fail closed")
+assert_equal(Updater.supportsDatabaseSchema(4), false,
+    "unknown future schema must fail closed")
 
 assert(Updater.isValidRepository("owner/wordwise.koplugin"),
     "normal public repository must be accepted")
@@ -59,8 +75,8 @@ assert(not Updater.isValidRepository("owner/repo;touch-x"),
     "shell punctuation must be rejected")
 
 assert_equal(Updater.compareVersions(
-    "2026.07.1-rc1.4.3", "2026.07.1-rc1.4.1"), 1,
-    "RC1.4.3 patch build must be newer than the RC1.4.1 baseline")
+    "2026.07.1-rc1.4.4", "2026.07.1-rc1.4.1"), 1,
+    "RC1.4.4 patch build must be newer than the RC1.4.1 baseline")
 assert_equal(Updater.compareVersions(
     "2026.07.1", "2026.07.1-rc1.99"), 1,
     "stable release must be newer than its RC")
@@ -70,39 +86,76 @@ assert_equal(Updater.compareVersions(
 assert_equal(Updater.compareVersions("bad-version", "2026.07.1"), nil,
     "unsupported versions must fail closed")
 
-local data_zip_name, data_checksum_name = Updater.dataAssetNamesForVersion("2026.07.1-rc1.4.3")
-assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.3.zip",
+local data_zip_name, data_checksum_name = Updater.dataAssetNamesForVersion("2026.07.1-rc1.4.4")
+assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.4.zip",
     "database ZIP name must be deterministic")
 assert_equal(data_checksum_name, data_zip_name .. ".sha256",
     "database checksum must follow the ZIP name")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.3")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.3.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.4")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.4.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
 
+local valid_record = function(path, domain)
+    return {
+        archive_path = path, database_domain = domain,
+        sha256 = string.rep("a", 64), bytes = 1,
+        entries = 1, phrases = 0, aliases = 0, irregulars = 0,
+        reviewed_vietnamese = 0, english_only = 1,
+        translation_policy = "manual/domain-reviewed only",
+    }
+end
+local v3_manifest_records, v3_manifest_err = Updater.validateDataManifest({
+    format = 1, package_type = "database-only",
+    build_version = "2026.07.1-rc1.4.4",
+    database_schema = 3, minimum_updater_schema = 3,
+    known_words_included = false, book_settings_included = false,
+    databases = {
+        valid_record("koreader/wordwise/databases/wordwise_general.db", "general"),
+        valid_record("koreader/wordwise/databases/wordwise_economics.db", "economics"),
+        valid_record("koreader/wordwise/databases/wordwise_physics.db", "physics"),
+    },
+}, "2026.07.1-rc1.4.4")
+assert(v3_manifest_records, v3_manifest_err or
+    "schema-v3 manifest must be accepted by the bridge updater")
+
 local releases = {
-    { tag_name = "v2026.07.1-rc1.4.3", prerelease = true, draft = false },
     { tag_name = "v2026.07.1-rc1.4.4", prerelease = true, draft = false },
+    { tag_name = "v2026.07.1-rc1.4.5", prerelease = true, draft = false },
     { tag_name = "v2026.08.1-rc1.0", prerelease = true, draft = true },
     { tag_name = "v2026.06.9", prerelease = false, draft = false },
 }
 assert_equal(
-    Updater.selectRelease(releases, "2026.07.1-rc1.4.3", true).tag_name,
-    "v2026.07.1-rc1.4.4",
+    Updater.selectRelease(releases, "2026.07.1-rc1.4.4", true).tag_name,
+    "v2026.07.1-rc1.4.5",
     "RC channel must select the newest eligible non-draft release")
 assert_equal(
-    Updater.selectRelease(releases, "2026.07.1-rc1.4.3", false),
+    Updater.selectRelease(releases, "2026.07.1-rc1.4.4", false),
     nil,
     "stable channel must ignore prereleases")
+
+local code_only_assets = Updater.releaseAssets({
+    tag_name = "v2026.07.1-rc1.4.5",
+    assets = {
+        { name = "wordwise.koplugin-v2026.07.1-rc1.4.5.zip", browser_download_url = "https://example.test/code.zip" },
+        { name = "wordwise.koplugin-v2026.07.1-rc1.4.5.zip.sha256", browser_download_url = "https://example.test/code.sha256" },
+    },
+})
+assert_equal(code_only_assets.has_code, true,
+    "code-only bridge release must expose verified code assets")
+assert_equal(code_only_assets.has_data, false,
+    "code-only bridge release must not pretend data is available")
+assert_equal(code_only_assets.complete, false,
+    "code-only bridge release must be distinguishable from Full OTA")
 
 local mixed_releases = {
     { tag_name = "v2026.07.2-beta1", prerelease = true, draft = false },
     { tag_name = "v2026.07.1", prerelease = false, draft = false },
 }
 assert_equal(
-    Updater.selectRelease(mixed_releases, "2026.07.1-rc1.4.3", false).tag_name,
+    Updater.selectRelease(mixed_releases, "2026.07.1-rc1.4.4", false).tag_name,
     "v2026.07.1",
     "stable channel must select a stable successor")
 
@@ -129,15 +182,15 @@ assert_equal(Updater.includesPrereleases(), false,
     "release-channel preference must be saved")
 
 local battery_release = {
-    { tag_name = "v2026.07.1-rc1.4.3", prerelease = true, draft = false },
+    { tag_name = "v2026.07.1-rc1.4.4", prerelease = true, draft = false },
 }
 assert_equal(
     Updater.selectRelease(battery_release, "2026.07.1-rc1.4.1", true).tag_name,
-    "v2026.07.1-rc1.4.3",
-    "RC1.4.1 must discover the RC1.4.3 patch release")
+    "v2026.07.1-rc1.4.4",
+    "RC1.4.1 must discover the RC1.4.4 patch release")
 assert_equal(
-    Updater.selectRelease(battery_release, "2026.07.1-rc1.4.3", true),
+    Updater.selectRelease(battery_release, "2026.07.1-rc1.4.4", true),
     nil,
-    "RC1.4.3 must not offer itself as an update")
+    "RC1.4.4 must not offer itself as an update")
 
-print("RC1.4.3 updater logic tests: PASS")
+print("RC1.4.4 updater logic tests: PASS")

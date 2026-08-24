@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin candidate version: `2026.07.1-rc1.4.3`.
+Current plugin candidate version: `2026.07.1-rc1.4.4` bridge.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -37,15 +37,15 @@ repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
 
-## RC1.4.3 OTA Schema Compatibility Hotfix
+## RC1.4.4 Bridge Updater
 
-RC1.4.3 fixes the remaining bootstrap incompatibility exposed by the device. The RC1.4.2 data bundle was legacy-safe at the archive-file level, but its databases used physical schema v3 with the appended `sense2_context_keywords` column. Older updater validators reject that 16-column layout before the new code can be installed. RC1.4.3 publishes the same reviewed data in physical schema v2 with the original 15-column `entries` layout and `schema_version=2`. The runtime already has a schema-v2 fallback, so the bundle can pass old validators while newer code remains able to read both v2 and v3.
+RC1.4.4 is a code-only bridge release. The updater advertises support for database schemas 2 and 3, validates each layout explicitly, accepts code-only releases, and records the database schema in pending and backup state. This separates the code bootstrap from the later schema-v3 data migration: an old device can first install the bridge code without being forced to validate a schema-v3 database with an older validator.
 
-The required auxiliary allow-list remains limited to `manifest.json` and `WordWise_Databases_README.txt`; Wiktionary attribution is retained in those files. `WIKTIONARY_ATTRIBUTION.md` remains optional for new clients and is not included in the direct-OTA bundle.
+The database manifest contract now supports `database_schema` and `minimum_updater_schema`. Schema-v2 bundles may carry reviewed alternate-sense context keywords in the optional `sense2_context` table; schema-v3 bundles carry them directly in `entries.sense2_context_keywords`. The validator rejects mismatched metadata, unsupported tables/objects, duplicate or unknown archive paths, and user-data targets. The required auxiliary allow-list remains limited to `manifest.json` and `WordWise_Databases_README.txt`; Wiktionary attribution is retained in those files.
 
-## RC1.4.2 OTA Allow-List Correction
+## RC1.4.3 OTA Schema-v2 Bootstrap
 
-RC1.4.1 attempted to permit a top-level `WIKTIONARY_ATTRIBUTION.md` auxiliary file, but that change could not help an older updater because the older client validates the database archive before installing new updater code. RC1.4.2 removed that extra file from the published bundle and retained its attribution text in the legacy-safe README and manifest. RC1.4.3 additionally restores the physical schema-v2 data layout required by the oldest updater validator. All unlisted files remain rejected, and user data is never an archive target.
+RC1.4.1 attempted to permit a top-level `WIKTIONARY_ATTRIBUTION.md` auxiliary file, but that change could not help an older updater because the older client validates the database archive before installing new updater code. RC1.4.2 removed that extra file from the published bundle. RC1.4.3 additionally restored the physical schema-v2 data layout required by the oldest updater validator. RC1.4.4 adds the bridge capability contract and code-only path needed before a future schema-v3 data release. All unlisted files remain rejected, and user data is never an archive target.
 
 ## RC1.4.0 Wiktionary Expansion and Hybrid Difficulty
 
