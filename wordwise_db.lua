@@ -14,6 +14,14 @@ SELECT term, lemma, short_en, short_vi, difficulty, pos, domain,
        phrase_len, priority, requires_context, register_label
 FROM entries WHERE term = ?1 COLLATE NOCASE LIMIT 1;
 ]]
+local SENSE_CONTEXT_TABLE_PROBE_SQL = [[
+SELECT name FROM sqlite_master
+WHERE type = 'table' AND name = 'sense2_context' LIMIT 1;
+]]
+local SENSE_CONTEXT_SQL = [[
+SELECT context_keywords FROM sense2_context
+WHERE term = ?1 COLLATE NOCASE LIMIT 1;
+]]
 local ALIAS_SQL = [[
 SELECT alias, term, case_sensitive FROM aliases
 WHERE alias = ?1 COLLATE NOCASE
@@ -175,6 +183,13 @@ function WordWiseDB.open(path)
         end
         self.entry_stmt = conn:prepare(self.has_sense_context
             and ENTRY_SQL_WITH_SENSE_CONTEXT or ENTRY_SQL_LEGACY)
+        local table_probe = conn:prepare(SENSE_CONTEXT_TABLE_PROBE_SQL)
+        local table_row = table_probe:step()
+        table_probe:close()
+        self.has_sense_context_table = table_row and table_row[1] == "sense2_context"
+        if self.has_sense_context_table then
+            self.sense_context_stmt = conn:prepare(SENSE_CONTEXT_SQL)
+        end
         self.alias_stmt = conn:prepare(ALIAS_SQL)
         self.irregular_stmt = conn:prepare(IRREGULAR_SQL)
         self.meta_stmt = conn:prepare(META_SQL)
@@ -182,7 +197,8 @@ function WordWiseDB.open(path)
         self.phrase_alias_stmt = conn:prepare(PHRASE_ALIAS_SQL)
     end)
     if not ok2 or not self.entry_stmt or not self.alias_stmt or not self.irregular_stmt
-        or not self.meta_stmt or not self.phrase_entry_stmt or not self.phrase_alias_stmt then
+        or not self.meta_stmt or not self.phrase_entry_stmt or not self.phrase_alias_stmt
+        or (self.has_sense_context_table and not self.sense_context_stmt) then
         logger.warn("WordWiseDB: schema prepare failed", tostring(err))
         pcall(function() conn:close() end)
         return nil, "incompatible database schema"
@@ -260,6 +276,13 @@ function WordWiseDB:_entry(term)
         self.entry_stmt:bind(term)
         result = row_to_entry(self.entry_stmt:step(), self.has_sense_context)
         self.entry_stmt:clearbind():reset()
+        if result and self.sense_context_stmt then
+            self.sense_context_stmt:reset():clearbind()
+            self.sense_context_stmt:bind(term)
+            local context_row = self.sense_context_stmt:step()
+            result.sense2_context_keywords = trim(context_row and context_row[1])
+            self.sense_context_stmt:clearbind():reset()
+        end
     end)
     if not ok then
         logger.warn("WordWiseDB: entry lookup failed", term, tostring(err))
@@ -394,8 +417,9 @@ end
 
 function WordWiseDB:close()
     for _, stmt in ipairs({
-        self.entry_stmt, self.alias_stmt, self.irregular_stmt, self.meta_stmt,
-        self.phrase_entry_stmt, self.phrase_alias_stmt,
+        self.entry_stmt, self.sense_context_stmt, self.alias_stmt,
+        self.irregular_stmt, self.meta_stmt, self.phrase_entry_stmt,
+        self.phrase_alias_stmt,
     }) do
         if stmt then pcall(function() stmt:close() end) end
     end

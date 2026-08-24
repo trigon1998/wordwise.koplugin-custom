@@ -4,6 +4,9 @@ local prepared_sql = {}
 local phrase_steps = 0
 
 local function rows_for(sql)
+    if sql:find("SELECT sense2_context_keywords FROM entries LIMIT 0", 1, true) then
+        return { { "sense2_context_keywords" } }
+    end
     if sql:find("SELECT term FROM entries WHERE phrase_len", 1, true) then
         return {
             { "earnings before interest and taxes" },
@@ -72,11 +75,13 @@ end
 
 local db, err = WordWiseDB.open("/tmp/wordwise-test.db")
 assert(db, err or "database fixture must open")
-assert_equal(#prepared_sql, 7,
-    "all repeated and one-shot SQL statements must be prepared once")
+assert_equal(#prepared_sql, 8,
+    "all probes, repeated and one-shot SQL statements must be prepared once")
 assert(prepared_sql[2].sql:find("sense2_context_keywords", 1, true),
     "sense-aware entry lookup must include alternate context keywords")
-assert(prepared_sql[4].sql:find("JOIN entries", 1, true),
+assert(prepared_sql[3].sql:find("sqlite_master", 1, true),
+    "schema-v2 context table probe must be explicit")
+assert(prepared_sql[5].sql:find("JOIN entries", 1, true),
     "irregular lookup must reject mappings without a target entry")
 
 assert_lengths(db:getPhraseLengths("Earnings"), { 5, 3 },
@@ -93,10 +98,10 @@ db:getPhraseLengths("earnings")
 assert_equal(phrase_steps, steps_after_build,
     "phrase rows must be scanned only once per active database")
 
-assert(prepared_sql[6].closed and prepared_sql[7].closed,
+assert(prepared_sql[7].closed and prepared_sql[8].closed,
     "one-shot phrase statements must close after the compact index is built")
 
 db:close()
 assert(connection.closed, "closing Word Wise DB must close SQLite")
 
-print("RC1.4.2 database and sense tests: PASS")
+print("RC1.4.3 database and sense tests: PASS")
