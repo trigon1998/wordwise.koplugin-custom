@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin version: `2026.07.1-rc1.3.9`.
+Current plugin candidate version: `2026.07.1-rc1.4.0`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -37,13 +37,23 @@ repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
 
+## RC1.4.0 Wiktionary Expansion and Hybrid Difficulty
+
+RC1.4.0 keeps the RC1.3.9 runtime sense-selection contract and expands the General data in a separate database-only candidate. The builder imports 538 exact Vietnamese gloss overrides from English Wiktionary and 92 phrase rows from a manually curated first batch. General rises from 48 to 678 entries with non-empty Vietnamese glosses and from 0 to 92 phrases. General overrides are domain-scoped; they are not applied to Economics or Physics merely because a term is shared.
+
+The Wiktionary extraction stores a source URL per override and ships `WIKTIONARY_ATTRIBUTION.md` with the database bundle. Unreviewed Wiktionary, ACL, EAWL and SWL queues remain outside the runtime data. The extraction pipeline does not generate Vietnamese text. The release candidate is an adapted selection of Wiktionary material and therefore retains CC BY-SA 4.0/GFDL attribution, applicable ShareAlike/transparent-copy obligations, and the source links required for audit.
+
+Three existing alternate senses that had a reviewed English/Vietnamese match in Wiktionary now receive a Vietnamese alternate gloss: Economics `beta`, and Physics `inflation` and `infrared`. The remaining nine sense2 rows without a sufficiently direct Wiktionary translation remain unchanged rather than receiving guessed text.
+
+The candidate database builder applies the approved hybrid difficulty policy: `min(CEFR difficulty, frequency difficulty)`, wordfreq 3.1.1 Zipf scores with term/lemma normalization, CEFR-only fallback for Zipf 0, conservative phrase handling, and preserved numeric/POS/proper-name/domain exceptions. The candidate archive is named `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly.
+
 ## RC1.3.9 Context-Aware Sense/Gloss Selection
 
 RC1.3.9 completes the context-aware behavior that earlier releases only applied at candidate filtering/ranking level. `main.lua` now passes the prepared ±10-token context to `ContextScorer.acceptPrepared()`, captures the selected gloss and sense kind, and renders that selected English/Vietnamese pair. The popup preserves the primary and alternate glosses and labels the non-selected one as the other possible sense.
 
 `context_scorer.lua` scores primary `context_keywords` and reviewed alternate `sense2_context_keywords` independently. An alternate sense wins only when it has a strict positive score greater than the primary score; ties, zero evidence, missing alternate metadata and legacy entries all remain on the primary gloss. Required-context entries still fail closed when neither sense has evidence.
 
-The database runtime probes for `sense2_context_keywords` and explicitly selects either the schema-v3 column or the legacy schema-v2 query. The updater accepts both physical entries layouts, while new candidate databases use schema version 3 with the append-only column. The data package contains 83 reviewed mappings: 28 Economics and 55 Physics. The mapping file records domain, POS, the already-reviewed alternate English/Vietnamese gloss, context keywords and a review note; no Vietnamese translation is generated automatically.
+The database runtime probes for `sense2_context_keywords` and explicitly selects either the schema-v3 column or the legacy schema-v2 query. The updater accepts both physical entries layouts, while new candidate databases use schema version 3 with the append-only column. The data package contains 83 reviewed context mappings: 28 Economics and 55 Physics. RC1.4.0 adds only three Wiktionary-sourced alternate Vietnamese glosses to existing sense2 rows; no Vietnamese translation is generated automatically.
 
 The behavior is covered by context scorer tests for primary/alternate/tie/zero fallback, main tests for rendering a selected alternate gloss, database tests for schema-aware prepared statements, and the existing updater/full-archive checks.
 
