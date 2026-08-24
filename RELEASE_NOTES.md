@@ -1,13 +1,15 @@
-# Word Wise 2026.07.1-rc1.4.1
+# Word Wise 2026.07.1-rc1.4.2
 
-## OTA allow-list hotfix
+## OTA compatibility hotfix
 
-RC1.4.1 sửa lỗi RC1.4.0 khiến updater từ chối database bundle hợp lệ vì bundle có thêm file bắt buộc `WIKTIONARY_ATTRIBUTION.md`. Allow-list hiện cho phép đúng file attribution này, vẫn yêu cầu file xuất hiện và tiếp tục từ chối mọi file ngoài danh sách. Nội dung database, gloss, phrase và hybrid difficulty không thay đổi.
+RC1.4.2 sửa lỗi của RC1.4.0/RC1.4.1: database bundle không còn chứa file auxiliary mới mà updater cũ không biết, vì vậy thiết bị đang chạy RC1.3.9 có thể cài trực tiếp bản vá. Attribution Wiktionary vẫn được giữ trong `WordWise_Databases_README.txt` và `manifest.json`, là hai file đã nằm trong allow-list legacy. Updater mới vẫn chấp nhận optional `WIKTIONARY_ATTRIBUTION.md` nếu gặp bundle RC1.4.1 cũ.
+
+Allow-list vẫn từ chối mọi file không được phép. Nội dung database, gloss, phrase và hybrid difficulty không thay đổi trong bản vá này.
 
 
 ## Database expansion and hybrid difficulty
 
-RC1.4.0 is a release candidate that expands the database without changing user data or replacing the public RC1.3.9 release. The General database adds **538 exact Vietnamese gloss overrides** selected from English Wiktionary and **92 reviewed phrase/collocation rows**. General therefore increases from 48 to 678 entries with a non-empty Vietnamese gloss and from 0 to 92 phrase entries.
+RC1.4.2 is a release candidate that expands the database without changing user data or replacing the public RC1.3.9 release. The General database adds **538 exact Vietnamese gloss overrides** selected from English Wiktionary and **92 reviewed phrase/collocation rows**. General therefore increases from 48 to 678 entries with a non-empty Vietnamese gloss and from 0 to 92 phrase entries.
 
 Economics and Physics retain their existing domain-reviewed glosses and sense/context mappings. General gloss overrides are domain-scoped and are not copied into Economics or Physics merely because a term is shared. Three existing alternate senses with direct Wiktionary translations are also filled: Economics `beta`, and Physics `inflation` and `infrared`. Other missing alternate glosses remain blank rather than receiving guessed text.
 
@@ -43,7 +45,7 @@ RC1.4.0 retains the RC1.3.9 runtime behavior that moved context awareness from c
 
 The Full OTA remains database-only for user data purposes. It does not include `known_words.db`, reading progress, book sidecars or other per-user files. Existing backup, checksum, manifest, SQLite integrity and restart-time replacement protections remain in place.
 
-The database asset name is `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly. The code and database candidate use the same build version: `2026.07.1-rc1.4.0`.
+The database asset name is `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly. The code and database candidate use the same build version: `2026.07.1-rc1.4.2`.
 
 ## Verification
 

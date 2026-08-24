@@ -89,6 +89,11 @@ end
 local DATA_AUXILIARY_FILES = {
     ["manifest.json"] = "manifest.json",
     ["WordWise_Databases_README.txt"] = "README.txt",
+}
+
+-- Optional metadata accepted by the new updater, but not required. Keeping it
+-- outside the required legacy-safe set lets older clients install the bundle.
+local DATA_OPTIONAL_AUXILIARY_FILES = {
     ["WIKTIONARY_ATTRIBUTION.md"] = "WIKTIONARY_ATTRIBUTION.md",
 }
 
@@ -665,7 +670,9 @@ local function extract_data_release(archive_path, destination)
             end
         elseif entry.mode == "file" then
             local spec = DATA_FILE_BY_ARCHIVE_PATH[path]
-            local target_name = spec and spec.name or DATA_AUXILIARY_FILES[path]
+            local target_name = spec and spec.name
+                or DATA_AUXILIARY_FILES[path]
+                or DATA_OPTIONAL_AUXILIARY_FILES[path]
             local size = tonumber(entry.size) or -1
             local maximum = spec and Config.max_database_bytes or Config.max_data_metadata_bytes
             if not target_name then

@@ -9,7 +9,7 @@ Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
 code-only; verified dictionary databases are distributed as a separate Full OTA
 Release asset.
 
-Current plugin candidate version: `2026.07.1-rc1.4.1`.
+Current plugin candidate version: `2026.07.1-rc1.4.2`.
 
 Release repository:
 [`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
@@ -37,9 +37,13 @@ repository owner confirms private permission from the upstream author to
 modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
 scope of that notice.
 
-## RC1.4.1 OTA Allow-List Hotfix
+## RC1.4.2 OTA Compatibility Hotfix
 
-RC1.4.1 permits the required top-level `WIKTIONARY_ATTRIBUTION.md` auxiliary file in the database archive allow-list. The file is still required, extracted under the staging directory, size-limited by `max_data_metadata_bytes`, and all unlisted files remain rejected. This patch does not alter database contents or user-data handling.
+RC1.4.2 fixes the RC1.4.1 compatibility mistake. The required auxiliary allow-list remains limited to the two files accepted by older clients: `manifest.json` and `WordWise_Databases_README.txt`. `WIKTIONARY_ATTRIBUTION.md` is now optional for new clients, not required in the data archive, and its attribution content is duplicated in the legacy-safe README and manifest. This allows an existing RC1.3.9/RC1.4.0-era updater to install the new database bundle without rejecting an unknown file, while the new updater can still accept the earlier bundle that contains the optional file.
+
+## RC1.4.1 OTA Allow-List Mistake
+
+RC1.4.1 attempted to permit a top-level `WIKTIONARY_ATTRIBUTION.md` auxiliary file, but that change could not help an older updater: the older client validates the database archive before installing the new updater code. RC1.4.2 therefore removes that extra file from the published bundle while retaining its attribution text in the legacy-safe README and manifest. All unlisted files remain rejected, and this correction does not alter database contents or user-data handling.
 
 ## RC1.4.0 Wiktionary Expansion and Hybrid Difficulty
 
