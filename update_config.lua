@@ -3,7 +3,8 @@
 -- Public GitHub Releases endpoint used by the on-device updater. Users can
 -- still override this value from Word Wise > Updates on the device.
 return {
-    version = "2026.07.1-rc1.4.10",
+    version = "2026.07.1-rc1.4.11",
+    database_bundle_version = "2026.07.1-rc1.4.7",
     plugin_id = "wordwise.koplugin",
     asset_basename = "wordwise.koplugin",
     data_asset_basename = "WordWise_Databases_",

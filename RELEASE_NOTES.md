@@ -1,5 +1,21 @@
 # Word Wise 2026.07.1 — Unified CEFR rollout
 
+## RC1.4.11 — database version status hotfix
+
+RC1.4.11 sửa thông báo sai sau khi unified migration thành công. Database bundle
+RC1.4.7 là bản data hiện hành, trong khi plugin code đã ở RC1.4.10; updater trước
+đó so sánh database trực tiếp với code version và báo `The matching database
+release is unavailable` khi người dùng kiểm tra lần nữa.
+
+Cấu hình nay khai báo riêng `database_bundle_version`. Database RC1.4.7 được coi
+là hiện hành khi đã được validate đầy đủ, dù số version thấp hơn plugin code.
+Database RC1.4.3 vẫn được nhận diện là cũ và tiếp tục được đề xuất migration.
+Không có thay đổi nào tới known words, tiến độ đọc hoặc sidecar.
+
+Thiết bị đang chạy RC1.4.10 nên cài RC1.4.11 code-only và restart. Sau đó kiểm
+tra cập nhật lần nữa; nếu database đã ở RC1.4.7, updater phải báo đã cập nhật thay
+vì báo database release unavailable.
+
 ## RC1.4.10 — staged schema validation hotfix
 
 RC1.4.10 sửa lỗi gốc trong đường data-only OTA. Hàm validate staged database

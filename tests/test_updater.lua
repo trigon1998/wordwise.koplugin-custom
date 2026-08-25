@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.10",
+assert_equal(metadata.version, "2026.07.1-rc1.4.11",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -54,6 +54,13 @@ assert_equal(capabilities.code_only_bridge, true,
     "updater must advertise code-only bridge support")
 assert_equal(capabilities.unified_database_layout, true,
     "updater must advertise unified database layout support")
+local update_config = require("update_config")
+assert_equal(update_config.database_bundle_version, "2026.07.1-rc1.4.7",
+    "code config must declare the current database bundle independently")
+assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.7", "2026.07.1-rc1.4.10"), true,
+    "current data bundle must remain current when code version is newer")
+assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.3", "2026.07.1-rc1.4.10"), false,
+    "older data bundle must still require migration")
 assert_equal(Updater.supportsDatabaseSchema(2), true,
     "schema-v2 must be supported")
 assert_equal(Updater.supportsDatabaseSchema(3), true,
@@ -94,8 +101,8 @@ assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.5.zip",
 assert_equal(data_checksum_name, data_zip_name .. ".sha256",
     "database checksum must follow the ZIP name")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.10")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.10.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.11")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.11.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
@@ -265,4 +272,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.10 updater logic tests: PASS")
+print("RC1.4.11 updater logic tests: PASS")

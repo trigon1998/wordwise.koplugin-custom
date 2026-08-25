@@ -299,6 +299,14 @@ function Updater.compareVersions(left, right)
     return 0
 end
 
+function Updater.isDatabaseVersionCurrent(detected_version, expected_code_version)
+    if not detected_version then return false end
+    local expected = tostring(Config.database_bundle_version
+        or expected_code_version or Config.version)
+    local comparison = Updater.compareVersions(tostring(detected_version), expected)
+    return comparison == 0 or comparison == 1
+end
+
 function Updater.assetNamesForVersion(version)
     local base = Config.asset_basename .. "-v" .. tostring(version)
     return base .. ".zip", base .. ".zip.sha256"
@@ -1219,8 +1227,8 @@ function Updater.databaseUpdateNeeded(expected_version, verify_integrity)
         return false, stored
     end
     local detected = detect_database_bundle_version(paths)
-    local detected_is_current_or_newer = detected
-        and (detected == expected_version or Updater.compareVersions(detected, expected_version) == 1)
+    local detected_is_current_or_newer =
+        Updater.isDatabaseVersionCurrent(detected, expected_version)
     if detected_is_current_or_newer then
         if verify_integrity then
             if lfs.attributes(paths.installed_data_manifest, "mode") == "file" then
