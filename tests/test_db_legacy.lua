@@ -72,4 +72,4 @@ assert(inflected.surface == "dawdling", "resolved entry must retain surface form
 assert(inflected.short_vi == "lãng phí thời gian", "coverage gloss must survive irregular lookup")
 db:close()
 
-print("RC1.4.5 legacy database compatibility tests: PASS")
+print("RC1.4.6 legacy database compatibility tests: PASS")

@@ -17,4 +17,5 @@ run_test tests/test_main.lua
 run_test tests/test_context_scorer.lua
 run_test tests/test_db.lua
 run_test tests/test_db_legacy.lua
+run_test tests/test_db_unified.lua
 run_test tests/test_updater.lua

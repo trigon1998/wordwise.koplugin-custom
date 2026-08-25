@@ -6,13 +6,15 @@ local ENTRY_SQL_LEGACY = [[
 SELECT term, lemma, short_en, short_vi, difficulty, pos, domain,
        sense2_en, sense2_vi, context_keywords, phrase_len, priority,
        requires_context, register_label
-FROM entries WHERE term = ?1 COLLATE NOCASE LIMIT 1;
+FROM entries WHERE term = ?1 COLLATE NOCASE
+ORDER BY priority DESC, domain COLLATE NOCASE, term COLLATE NOCASE;
 ]]
 local ENTRY_SQL_WITH_SENSE_CONTEXT = [[
 SELECT term, lemma, short_en, short_vi, difficulty, pos, domain,
        sense2_en, sense2_vi, context_keywords, sense2_context_keywords,
        phrase_len, priority, requires_context, register_label
-FROM entries WHERE term = ?1 COLLATE NOCASE LIMIT 1;
+FROM entries WHERE term = ?1 COLLATE NOCASE
+ORDER BY priority DESC, domain COLLATE NOCASE, term COLLATE NOCASE;
 ]]
 local SENSE_CONTEXT_TABLE_PROBE_SQL = [[
 SELECT name FROM sqlite_master
@@ -21,6 +23,10 @@ WHERE type = 'table' AND name = 'sense2_context' LIMIT 1;
 local SENSE_CONTEXT_SQL = [[
 SELECT context_keywords FROM sense2_context
 WHERE term = ?1 COLLATE NOCASE LIMIT 1;
+]]
+local SENSE_CONTEXT_DOMAIN_SQL = [[
+SELECT domain, context_keywords FROM sense2_context
+WHERE term = ?1 COLLATE NOCASE;
 ]]
 local ALIAS_SQL = [[
 SELECT alias, term, case_sensitive FROM aliases
@@ -188,7 +194,17 @@ function WordWiseDB.open(path)
         table_probe:close()
         self.has_sense_context_table = table_row and table_row[1] == "sense2_context"
         if self.has_sense_context_table then
-            self.sense_context_stmt = conn:prepare(SENSE_CONTEXT_SQL)
+            local context_columns = {}
+            local context_probe = conn:prepare("PRAGMA table_info(sense2_context);")
+            while true do
+                local row = context_probe:step()
+                if not row then break end
+                context_columns[row[2]] = true
+            end
+            context_probe:close()
+            self.has_domain_context = context_columns.domain == true
+            self.sense_context_stmt = conn:prepare(
+                self.has_domain_context and SENSE_CONTEXT_DOMAIN_SQL or SENSE_CONTEXT_SQL)
         end
         self.alias_stmt = conn:prepare(ALIAS_SQL)
         self.irregular_stmt = conn:prepare(IRREGULAR_SQL)
@@ -269,26 +285,44 @@ function WordWiseDB:_cache_put(key, value)
     self.cache[key] = value or false
 end
 
-function WordWiseDB:_entry(term)
-    local result
+function WordWiseDB:_entries(term)
+    local results = {}
     local ok, err = pcall(function()
         self.entry_stmt:reset():clearbind()
         self.entry_stmt:bind(term)
-        result = row_to_entry(self.entry_stmt:step(), self.has_sense_context)
-        self.entry_stmt:clearbind():reset()
-        if result and self.sense_context_stmt then
-            self.sense_context_stmt:reset():clearbind()
-            self.sense_context_stmt:bind(term)
-            local context_row = self.sense_context_stmt:step()
-            result.sense2_context_keywords = trim(context_row and context_row[1])
-            self.sense_context_stmt:clearbind():reset()
+        while true do
+            local result = row_to_entry(self.entry_stmt:step(), self.has_sense_context)
+            if not result then break end
+            if self.sense_context_stmt then
+                self.sense_context_stmt:reset():clearbind()
+                self.sense_context_stmt:bind(term)
+                local context_row
+                while true do
+                    local row = self.sense_context_stmt:step()
+                    if not row then break end
+                    if not self.has_domain_context
+                        or tostring(row[1] or ""):lower() == tostring(result.domain or ""):lower() then
+                        context_row = row
+                        break
+                    end
+                end
+                result.sense2_context_keywords = trim(context_row
+                    and (self.has_domain_context and context_row[2] or context_row[1]))
+                self.sense_context_stmt:clearbind():reset()
+            end
+            results[#results + 1] = result
         end
+        self.entry_stmt:clearbind():reset()
     end)
     if not ok then
         logger.warn("WordWiseDB: entry lookup failed", term, tostring(err))
         error(err)
     end
-    return result
+    return results
+end
+
+function WordWiseDB:_entry(term)
+    return self:_entries(term)[1]
 end
 
 function WordWiseDB:_alias(surface, case_sensitive_only)
@@ -325,78 +359,98 @@ function WordWiseDB:_alias(surface, case_sensitive_only)
     return target, false
 end
 
-function WordWiseDB:_irregular(surface)
-    local lemma
+function WordWiseDB:_irregulars(surface)
+    local lemmas = {}
     local ok, err = pcall(function()
         self.irregular_stmt:reset():clearbind()
         self.irregular_stmt:bind(surface)
-        local row = self.irregular_stmt:step()
-        lemma = row and row[1] or nil
+        while true do
+            local row = self.irregular_stmt:step()
+            if not row then break end
+            lemmas[#lemmas + 1] = row[1]
+        end
         self.irregular_stmt:clearbind():reset()
     end)
     if not ok then
         logger.warn("WordWiseDB: irregular lookup failed", surface, tostring(err))
         error(err)
     end
-    return lemma
+    return lemmas
+end
+
+function WordWiseDB:_irregular(surface)
+    return self:_irregulars(surface)[1]
+end
+
+function WordWiseDB:lookupCandidates(surface)
+    local norm = normalize(surface)
+    if norm == "" then return {} end
+    local cache_key = "c:" .. surface
+    local cached = self.cache[cache_key]
+    if cached ~= nil then return cached or {} end
+    local results
+    local target, ambiguous = self:_alias(surface, true)
+    if target then
+        results = self:_entries(target)
+    elseif ambiguous then
+        results = {}
+    else
+        results = self:_entries(norm)
+        if #results == 0 then
+            target, ambiguous = self:_alias(surface, false)
+            if target and not ambiguous then results = self:_entries(target) end
+        end
+    end
+    for _, entry in ipairs(results) do entry.surface = surface end
+    self:_cache_put(cache_key, #results > 0 and results or nil)
+    return results
 end
 
 function WordWiseDB:lookupExact(surface)
+    local results = self:lookupCandidates(surface)
+    if #results == 1 then return results[1] end
+    return nil
+end
+
+function WordWiseDB:lookupWordCandidates(surface)
     local norm = normalize(surface)
-    if norm == "" then return nil end
-    local cache_key = "e:" .. surface
+    if norm == "" then return {} end
+    local cache_key = "wc:" .. surface
     local cached = self.cache[cache_key]
-    if cached ~= nil then return cached or nil end
-    local result
-    -- A deliberately case-sensitive acronym such as BOP or ROE must beat the
-    -- unrelated lowercase exact word (bop/roe).  Ordinary aliases still stay
-    -- behind exact lookup, preserving the canonical exact-entry rule.
-    local target, ambiguous = self:_alias(surface, true)
-    if target then
-        result = self:_entry(target)
-    elseif not ambiguous then
-        result = self:_entry(norm)
-        if not result then
-            target, ambiguous = self:_alias(surface, false)
-            if target then result = self:_entry(target) end
+    if cached ~= nil then return cached or {} end
+    local results, seen = self:lookupCandidates(surface), {}
+    local function add_entries(entries)
+        for _, entry in ipairs(entries or {}) do
+            local key = (entry.term or ""):lower() .. "\31" .. (entry.domain or ""):lower()
+            if not seen[key] then
+                seen[key] = true
+                entry.surface = surface
+                results[#results + 1] = entry
+            end
         end
     end
-    if result then result.surface = surface end
-    self:_cache_put(cache_key, result)
-    return result
+    local direct_count = #results
+    if direct_count == 0 then
+        for _, lemma in ipairs(self:_irregulars(norm)) do add_entries(self:_entries(lemma)) end
+    end
+    if #results == 0 then
+        for _, candidate in ipairs(regular_candidates(norm)) do
+            local entries = self:_entries(candidate.term)
+            for _, entry in ipairs(entries) do
+                if pos_matches(entry, candidate.allowed_pos) then add_entries({ entry }) end
+            end
+        end
+        -- Multiple real lemmas remain visible to the context-aware selector;
+        -- callers that require the legacy single-result API still fail closed.
+    end
+    self:_cache_put(cache_key, #results > 0 and results or nil)
+    return results
 end
 
 function WordWiseDB:lookupWord(surface)
-    local norm = normalize(surface)
-    if norm == "" then return nil end
-    local cache_key = "w:" .. surface
-    local cached = self.cache[cache_key]
-    if cached ~= nil then return cached or nil end
-
-    local result = self:lookupExact(surface)
-    if not result then
-        local irregular = self:_irregular(norm)
-        if irregular then result = self:_entry(irregular) end
-    end
-    if not result then
-        local matches, matched_terms = {}, {}
-        for _, candidate in ipairs(regular_candidates(norm)) do
-            local entry = self:_entry(candidate.term)
-            if entry and pos_matches(entry, candidate.allowed_pos)
-                and not matched_terms[entry.term:lower()] then
-                matched_terms[entry.term:lower()] = true
-                matches[#matches + 1] = entry
-            end
-        end
-        -- Orthographic deinflection can produce two real words (for example
-        -- singing -> sing/singe).  Guessing in that situation is exactly how
-        -- gaming was previously mapped to the unrelated noun "gam".  Fail
-        -- closed unless the database leaves one unambiguous, POS-valid lemma.
-        if #matches == 1 then result = matches[1] end
-    end
-    if result then result.surface = surface end
-    self:_cache_put(cache_key, result)
-    return result
+    local results = self:lookupWordCandidates(surface)
+    if #results == 1 then return results[1] end
+    return nil
 end
 
 function WordWiseDB:getMetadata(key)

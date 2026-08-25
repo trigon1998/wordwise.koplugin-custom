@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.5",
+assert_equal(metadata.version, "2026.07.1-rc1.4.6",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -92,8 +92,8 @@ assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.5.zip",
 assert_equal(data_checksum_name, data_zip_name .. ".sha256",
     "database checksum must follow the ZIP name")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.5")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.5.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.6")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.6.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
@@ -121,6 +121,19 @@ local v3_manifest_records, v3_manifest_err = Updater.validateDataManifest({
 assert(v3_manifest_records, v3_manifest_err or
     "schema-v3 manifest must be accepted by the bridge updater")
 
+local unified_manifest_records, unified_manifest_err = Updater.validateDataManifest({
+    format = 1, package_type = "database-only",
+    build_version = "2026.07.1-rc1.4.7",
+    database_schema = 2, minimum_updater_schema = 2,
+    database_layout = "unified-single-database", database_count = 1,
+    known_words_included = false, book_settings_included = false,
+    databases = {
+        valid_record("koreader/wordwise/databases/wordwise.db", "unified"),
+    },
+}, "2026.07.1-rc1.4.7")
+assert(unified_manifest_records and unified_manifest_records["wordwise.db"],
+    unified_manifest_err or "unified database manifest must be accepted")
+
 local releases = {
     { tag_name = "v2026.07.1-rc1.4.5", prerelease = true, draft = false },
     { tag_name = "v2026.07.1-rc1.4.6", prerelease = true, draft = false },
@@ -135,6 +148,18 @@ assert_equal(
     Updater.selectRelease(releases, "2026.07.1-rc1.4.5", false),
     nil,
     "stable channel must ignore prereleases")
+
+local unified_data_assets = Updater.releaseAssets({
+    tag_name = "v2026.07.1-rc1.4.7",
+    assets = {
+        { name = "WordWise_Databases_2026.07.1-rc1.4.7.zip", browser_download_url = "https://example.test/data.zip" },
+        { name = "WordWise_Databases_2026.07.1-rc1.4.7.zip.sha256", browser_download_url = "https://example.test/data.sha256" },
+    },
+})
+assert_equal(unified_data_assets.has_data, true,
+    "unified database release must expose data assets")
+assert_equal(unified_data_assets.has_code, false,
+    "data-only release must not pretend code is available")
 
 local code_only_assets = Updater.releaseAssets({
     tag_name = "v2026.07.1-rc1.4.6",
@@ -193,4 +218,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.5 updater logic tests: PASS")
+print("RC1.4.6 updater logic tests: PASS")

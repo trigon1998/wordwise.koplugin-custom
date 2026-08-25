@@ -14,6 +14,7 @@ end
 
 local scheduled_callbacks = {}
 local render_measure_calls = 0
+local shown_dialog
 
 package.preload["ffi/blitbuffer"] = function()
     return { COLOR_DARK_GRAY = 1, COLOR_BLACK = 0 }
@@ -46,7 +47,7 @@ package.preload["ui/uimanager"] = function()
             scheduled_callbacks[#scheduled_callbacks + 1] = callback
         end,
         setDirty = function() end,
-        show = function() end,
+        show = function(_, dialog) shown_dialog = dialog end,
     }
 end
 package.preload["ui/widget/container/widgetcontainer"] = function() return WidgetContainer end
@@ -199,6 +200,19 @@ assert_equal(opened, nil, "hidden hint must not open a popup")
 assert_equal(tap:onHintTap({ pos = { x = 15, y = 15 } }), true,
     "a rendered hint must receive taps")
 assert_equal(opened.surface, "visible", "visible hint must open its popup")
+assert_equal(layout:getDomain(), "unified", "runtime must use unified dictionary mode")
+shown_dialog = nil
+WordWise.showHintPopup(tap, {
+    surface = "dawdling", lemma = "dawdle",
+    short_en = "to spend time idly and unfruitfully",
+    short_vi = "lãng phí thời gian",
+})
+assert(shown_dialog and shown_dialog.buttons, "quick tap must create a compact dialog")
+assert_equal(#shown_dialog.buttons, 1, "quick tap must use one compact button row")
+assert_equal(#shown_dialog.buttons[1], 2, "quick tap must expose exactly two actions")
+assert_equal(shown_dialog.buttons[1][1].text, "Known", "first quick tap action must be Known")
+assert_equal(shown_dialog.buttons[1][2].text, "Open dictionary",
+    "second quick tap action must open the dictionary")
 
 tap.page_cache = { stale = {} }
 tap.page_cache_order = { "stale" }
@@ -256,7 +270,7 @@ function matcher:isEnabled() return true end
 function matcher:isSupportedDocument() return true end
 function matcher:getDB() return phrase_db end
 function matcher:collectVisibleWords() return phrase_records, 7 end
-function matcher:getDomain() return "economics" end
+function matcher:getDomain() return "unified" end
 function matcher:getHintLevel() return 5 end
 function matcher:getGlossFontName() return "infofont" end
 function matcher:getGlossFontSize() return 13 end
@@ -294,6 +308,37 @@ assert_equal(selected_hint.selected_sense, "alternate",
 assert_equal(selected_hint.primary_short_en, "wealth used in business",
     "primary gloss must remain available for the popup alternative")
 
+local ambiguous_db = {}
+function ambiguous_db:lookupWordCandidates(term)
+    if term ~= "inflation" then return {} end
+    return {
+        { term = "inflation", lemma = "inflation", short_en = "persistent rise in general prices",
+          short_vi = "lạm phát", difficulty = 1, priority = 50, domain = "economics" },
+        { term = "inflation", lemma = "inflation", short_en = "extremely rapid early-universe expansion",
+          short_vi = "lạm phát vũ trụ", difficulty = 1, priority = 50, domain = "physics" },
+    }
+end
+local ambiguous_matcher = instance({
+    hints = {}, page_cache = {}, page_cache_order = {}, proper_names = {},
+    ui = { rolling = true, paging = false, font = { configurable = { line_spacing = 148 } } },
+})
+function ambiguous_matcher:isEnabled() return true end
+function ambiguous_matcher:isSupportedDocument() return true end
+function ambiguous_matcher:getDB() return ambiguous_db end
+function ambiguous_matcher:collectVisibleWords()
+    return {{ key = "inflation", surface = "inflation", box = { x = 10, y = 30, w = 40, h = 12 }}}, 9
+end
+function ambiguous_matcher:getDomain() return "unified" end
+function ambiguous_matcher:getHintLevel() return 5 end
+function ambiguous_matcher:getGlossFontName() return "infofont" end
+function ambiguous_matcher:getGlossFontSize() return 13 end
+function ambiguous_matcher:currentLineSpacing() return 148 end
+function ambiguous_matcher:isKnown() return false end
+function ambiguous_matcher:considerAutoSpacing() end
+ambiguous_matcher:computePageHints()
+assert_equal(#ambiguous_matcher.hints, 0,
+    "same-score domain translations must fail closed without context")
+
 local plain_records = {}
 for index = 1, 80 do
     plain_records[index] = {
@@ -323,7 +368,7 @@ function plain_matcher:isEnabled() return true end
 function plain_matcher:isSupportedDocument() return true end
 function plain_matcher:getDB() return plain_db end
 function plain_matcher:collectVisibleWords() return plain_records, 8 end
-function plain_matcher:getDomain() return "general" end
+function plain_matcher:getDomain() return "unified" end
 function plain_matcher:getHintLevel() return 5 end
 function plain_matcher:getGlossFontName() return "infofont" end
 function plain_matcher:getGlossFontSize() return 13 end
@@ -367,8 +412,8 @@ matcher.render_stats = {
     top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.5", 1, true),
-    "diagnostics must expose the RC1.4.5 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.6", 1, true),
+    "diagnostics must expose the RC1.4.6 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
@@ -383,4 +428,4 @@ assert(diagnostics:find(
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.4.5 main behavior tests: PASS")
+print("RC1.4.6 main behavior tests: PASS")

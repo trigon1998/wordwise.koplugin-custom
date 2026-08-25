@@ -104,4 +104,4 @@ assert(prepared_sql[7].closed and prepared_sql[8].closed,
 db:close()
 assert(connection.closed, "closing Word Wise DB must close SQLite")
 
-print("RC1.4.5 database and sense tests: PASS")
+print("RC1.4.6 database and sense tests: PASS")

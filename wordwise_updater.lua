@@ -61,7 +61,7 @@ local REQUIRED_FILES = {
     "update_config.lua",
 }
 
-local DATA_FILES = {
+local LEGACY_DATA_FILES = {
     {
         domain = "general",
         name = "wordwise_general.db",
@@ -79,22 +79,56 @@ local DATA_FILES = {
     },
 }
 
+local UNIFIED_DATA_FILES = {
+    {
+        domain = "unified",
+        name = "wordwise.db",
+        archive_path = "koreader/wordwise/databases/wordwise.db",
+    },
+}
+
+-- Kept as the legacy default for compatibility with helper code and tests;
+-- release manifests select the exact contract below.
+local DATA_FILES = LEGACY_DATA_FILES
+local ALL_DATA_FILES = {}
+for _, spec in ipairs(LEGACY_DATA_FILES) do ALL_DATA_FILES[#ALL_DATA_FILES + 1] = spec end
+for _, spec in ipairs(UNIFIED_DATA_FILES) do ALL_DATA_FILES[#ALL_DATA_FILES + 1] = spec end
+
 local DATA_FILE_BY_ARCHIVE_PATH = {}
 local DATA_FILE_BY_NAME = {}
-for _, spec in ipairs(DATA_FILES) do
+for _, spec in ipairs(ALL_DATA_FILES) do
     DATA_FILE_BY_ARCHIVE_PATH[spec.archive_path] = spec
     DATA_FILE_BY_NAME[spec.name] = spec
+end
+
+local function data_specs_for_manifest(manifest)
+    if type(manifest) == "table"
+        and (manifest.database_layout == "unified-single-database"
+            or tonumber(manifest.database_count) == 1) then
+        return UNIFIED_DATA_FILES
+    end
+    return LEGACY_DATA_FILES
+end
+
+local function data_specs_for_installed(paths)
+    if lfs.attributes(paths.databases .. "/wordwise.db", "mode") == "file" then
+        return UNIFIED_DATA_FILES
+    end
+    return LEGACY_DATA_FILES
+end
+
+local function data_layout_for_specs(specs)
+    return specs == UNIFIED_DATA_FILES and "unified-single-database"
+        or "legacy-three-database"
+end
+
+local function data_specs_for_layout(layout)
+    return layout == "unified-single-database" and UNIFIED_DATA_FILES or LEGACY_DATA_FILES
 end
 
 local DATA_AUXILIARY_FILES = {
     ["manifest.json"] = "manifest.json",
     ["WordWise_Databases_README.txt"] = "README.txt",
-}
-
--- Optional metadata accepted by the new updater, but not required. Keeping it
--- outside the required legacy-safe set lets older clients install the bundle.
-local DATA_OPTIONAL_AUXILIARY_FILES = {
-    ["WIKTIONARY_ATTRIBUTION.md"] = "WIKTIONARY_ATTRIBUTION.md",
 }
 
 local DATA_ALLOWED_DIRECTORIES = {
@@ -540,9 +574,11 @@ local function update_paths()
         staged_data = base .. "/database-stage",
         staged_manifest = base .. "/database-stage/manifest.json",
         pending_data_schema = base .. "/pending-database-schema.txt",
+        pending_data_layout = base .. "/pending-database-layout.txt",
         backup = base .. "/backup",
         data_backup = base .. "/database-backup",
         data_backup_schema = base .. "/database-backup/schema-version.txt",
+        data_backup_layout = base .. "/database-backup/layout.txt",
         data_restore_rollback = base .. "/database-restore-rollback",
         installed_data_manifest = base .. "/installed-database-manifest.json",
         pending_data_version = base .. "/pending-database-version.txt",
@@ -691,7 +727,6 @@ local function extract_data_release(archive_path, destination)
             local spec = DATA_FILE_BY_ARCHIVE_PATH[path]
             local target_name = spec and spec.name
                 or DATA_AUXILIARY_FILES[path]
-                or DATA_OPTIONAL_AUXILIARY_FILES[path]
             local size = tonumber(entry.size) or -1
             local maximum = spec and Config.max_database_bytes or Config.max_data_metadata_bytes
             if not target_name then
@@ -729,10 +764,16 @@ local function extract_data_release(archive_path, destination)
     for path in pairs(DATA_AUXILIARY_FILES) do
         if not seen[path] then return false, "missing database package file: " .. path end
     end
-    for _, spec in ipairs(DATA_FILES) do
-        if not seen[spec.archive_path] then
-            return false, "missing database package file: " .. spec.archive_path
-        end
+    local unified_seen = seen[UNIFIED_DATA_FILES[1].archive_path] == true
+    local legacy_seen = 0
+    for _, spec in ipairs(LEGACY_DATA_FILES) do
+        if seen[spec.archive_path] then legacy_seen = legacy_seen + 1 end
+    end
+    if unified_seen and legacy_seen > 0 then
+        return false, "database archive mixes unified and legacy layouts"
+    end
+    if not unified_seen and legacy_seen ~= #LEGACY_DATA_FILES then
+        return false, "legacy database archive is incomplete"
     end
     return true
 end
@@ -761,16 +802,29 @@ function Updater.validateDataManifest(manifest, release_version_expected)
         or minimum_updater_schema < MIN_DATABASE_SCHEMA then
         return nil, "invalid minimum updater schema in manifest"
     end
-    if type(manifest.databases) ~= "table" or #manifest.databases ~= #DATA_FILES then
-        return nil, "database manifest must describe exactly three databases"
+    local specs = data_specs_for_manifest(manifest)
+    if type(manifest.databases) ~= "table" or #manifest.databases ~= #specs then
+        return nil, #specs == 1
+            and "unified database manifest must describe exactly one database"
+            or "database manifest must describe exactly three databases"
+    end
+    if #specs == 1 and manifest.database_layout ~= "unified-single-database" then
+        return nil, "unified database manifest missing layout marker"
+    end
+    if #specs == 3 and manifest.database_layout == "unified-single-database" then
+        return nil, "legacy database manifest cannot use unified layout"
     end
 
+    local allowed = {}
+    for _, item in ipairs(specs) do allowed[item.name] = item end
     local records = {}
     records.__database_schema = database_schema
+    records.__data_specs = specs
     for _, record in ipairs(manifest.databases) do
         if type(record) ~= "table" then return nil, "invalid database manifest record" end
         local spec = DATA_FILE_BY_ARCHIVE_PATH[tostring(record.archive_path or "")]
-        if not spec or tostring(record.database_domain or "") ~= spec.domain then
+        if not spec or not allowed[spec.name]
+            or tostring(record.database_domain or "") ~= spec.domain then
             return nil, "database manifest path/domain mismatch"
         end
         if record.database_schema ~= nil
@@ -806,7 +860,7 @@ function Updater.validateDataManifest(manifest, release_version_expected)
         record.database_schema = database_schema
         records[spec.name] = record
     end
-    for _, spec in ipairs(DATA_FILES) do
+    for _, spec in ipairs(specs) do
         if not records[spec.name] then return nil, "database manifest is incomplete" end
     end
     return records
@@ -871,6 +925,11 @@ local function validate_database_objects(connection, schema_version)
     }
     if tonumber(schema_version) == 2 then allowed_tables.sense2_context = true end
     local allowed_indexes = { idx_entries_phrase = true }
+    local layout = sql_first_value(connection,
+        "SELECT value FROM metadata WHERE key='database_layout' LIMIT 1;")
+    if layout == "unified-single-database" then
+        allowed_indexes.idx_entries_term_nocase = true
+    end
     local statement = connection:prepare(
         "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%';")
     while true do
@@ -885,6 +944,21 @@ local function validate_database_objects(connection, schema_version)
         end
     end
     statement:close()
+    if tonumber(schema_version) == 2 then
+        local context_probe = connection:prepare("PRAGMA table_info(sense2_context);")
+        local context_columns = {}
+        while true do
+            local row = context_probe:step()
+            if not row then break end
+            context_columns[#context_columns + 1] = tostring(row[2] or "")
+        end
+        context_probe:close()
+        if #context_columns > 0
+            and table.concat(context_columns, "\31") ~= "term\31context_keywords"
+            and table.concat(context_columns, "\31") ~= "term\31domain\31context_keywords" then
+            return false, "schema mismatch: sense2_context"
+        end
+    end
     return true
 end
 
@@ -956,7 +1030,8 @@ local function validate_data_directory(directory, manifest_path, version)
     records, err = Updater.validateDataManifest(manifest, version)
     if not records then return false, err end
 
-    for _, spec in ipairs(DATA_FILES) do
+    local specs = records.__data_specs or LEGACY_DATA_FILES
+    for _, spec in ipairs(specs) do
         local path = directory .. "/" .. spec.name
         local record = records[spec.name]
         local size = lfs.attributes(path, "size")
@@ -969,7 +1044,7 @@ local function validate_data_directory(directory, manifest_path, version)
             path, spec, version, record, true)
         if not valid then return false, database_err end
     end
-    return true, records.__database_schema
+    return true, records.__database_schema, data_layout_for_specs(specs)
 end
 
 local function validate_staged_data(paths, version)
@@ -1054,7 +1129,7 @@ end
 
 local function detect_database_bundle_version(paths)
     local common
-    for _, spec in ipairs(DATA_FILES) do
+    for _, spec in ipairs(data_specs_for_installed(paths)) do
         local version = database_build_version(paths.databases .. "/" .. spec.name, spec.domain)
         if not version or version == "" then return nil end
         if common and common ~= version then return nil end
@@ -1065,7 +1140,7 @@ end
 
 local function detect_database_schema(paths)
     local common
-    for _, spec in ipairs(DATA_FILES) do
+    for _, spec in ipairs(data_specs_for_installed(paths)) do
         local schema = database_schema_version(paths.databases .. "/" .. spec.name, spec.domain)
         if not schema then return nil end
         if common and common ~= schema then return nil end
@@ -1079,7 +1154,7 @@ function Updater.databaseUpdateNeeded(expected_version, verify_integrity)
     local paths = update_paths()
     local stored = Updater.getInstalledDatabaseBundleVersion()
     if stored == expected_version and not verify_integrity then
-        for _, spec in ipairs(DATA_FILES) do
+        for _, spec in ipairs(data_specs_for_installed(paths)) do
             if lfs.attributes(paths.databases .. "/" .. spec.name, "mode") ~= "file" then
                 return true, stored
             end
@@ -1087,17 +1162,19 @@ function Updater.databaseUpdateNeeded(expected_version, verify_integrity)
         return false, stored
     end
     local detected = detect_database_bundle_version(paths)
-    if detected == expected_version then
+    local detected_is_current_or_newer = detected
+        and (detected == expected_version or Updater.compareVersions(detected, expected_version) == 1)
+    if detected_is_current_or_newer then
         if verify_integrity then
             if lfs.attributes(paths.installed_data_manifest, "mode") == "file" then
                 local valid = validate_data_directory(
-                    paths.databases, paths.installed_data_manifest, expected_version)
+                    paths.databases, paths.installed_data_manifest, detected)
                 if not valid then return true, detected end
             else
-                for _, spec in ipairs(DATA_FILES) do
+                for _, spec in ipairs(data_specs_for_installed(paths)) do
                     local valid = validate_sqlite_database(
                         paths.databases .. "/" .. spec.name,
-                        spec, expected_version, nil, false)
+                        spec, detected, nil, false)
                     if not valid then return true, detected end
                 end
             end
@@ -1116,6 +1193,15 @@ local function read_data_backup_schema(paths)
     return tonumber(read_first_line(paths.data_backup_schema) or "")
 end
 
+local function read_data_backup_layout(paths)
+    local stored = read_first_line(paths.data_backup_layout)
+    if stored then return stored end
+    if lfs.attributes(paths.data_backup .. "/wordwise.db", "mode") == "file" then
+        return "unified-single-database"
+    end
+    return "legacy-three-database"
+end
+
 local function read_missing_database_set(paths)
     local missing = {}
     local file = io.open(paths.data_backup .. "/missing_databases.txt", "rb")
@@ -1132,7 +1218,8 @@ local function backup_current_databases(paths)
     local ok, err = reset_directory(paths.data_backup)
     if not ok then return false, err end
     local missing = {}
-    for _, spec in ipairs(DATA_FILES) do
+    local current_specs = data_specs_for_installed(paths)
+    for _, spec in ipairs(current_specs) do
         local source = paths.databases .. "/" .. spec.name
         if lfs.attributes(source, "mode") == "file" then
             local copied, copy_err = copy_file(source, paths.data_backup .. "/" .. spec.name)
@@ -1156,12 +1243,17 @@ local function backup_current_databases(paths)
     local schema = detect_database_schema(paths) or 2
     local version_ok = atomic_write_text(paths.data_backup .. "/backup_version.txt", previous .. "\n")
     if not version_ok then return false end
-    return atomic_write_text(paths.data_backup_schema, tostring(schema) .. "\n")
+    local schema_ok = atomic_write_text(paths.data_backup_schema, tostring(schema) .. "\n")
+    if not schema_ok then return false end
+    return atomic_write_text(paths.data_backup_layout, data_layout_for_specs(current_specs) .. "\n")
 end
 
 local function restore_database_backup(paths)
     local missing = read_missing_database_set(paths)
-    for _, spec in ipairs(DATA_FILES) do
+    local backup_specs = data_specs_for_layout(read_data_backup_layout(paths))
+    local backup_names = {}
+    for _, spec in ipairs(backup_specs) do backup_names[spec.name] = true end
+    for _, spec in ipairs(backup_specs) do
         local backup = paths.data_backup .. "/" .. spec.name
         local target = paths.databases .. "/" .. spec.name
         if lfs.attributes(backup, "mode") == "file" then
@@ -1173,6 +1265,14 @@ local function restore_database_backup(paths)
             end
         else
             return false, "database backup is incomplete: " .. spec.name
+        end
+    end
+    for _, spec in ipairs(ALL_DATA_FILES) do
+        if not backup_names[spec.name] then
+            local target = paths.databases .. "/" .. spec.name
+            if lfs.attributes(target, "mode") == "file" and not os.remove(target) then
+                return false, "cannot remove incompatible database: " .. spec.name
+            end
         end
     end
     local backup_manifest = paths.data_backup .. "/manifest.json"
@@ -1188,14 +1288,19 @@ end
 local function discard_pending_data(paths)
     pcall(os.remove, paths.pending_data_version)
     pcall(os.remove, paths.pending_data_schema)
+    pcall(os.remove, paths.pending_data_layout)
     pcall(os.remove, paths.data_install_state)
     if lfs.attributes(paths.staged_data, "mode") then pcall(clear_tree, paths.staged_data) end
 end
 
-local function mark_pending_data(paths, version, schema_version)
+local function mark_pending_data(paths, version, schema_version, layout)
     local ok, err = atomic_write_text(paths.pending_data_version, tostring(version) .. "\n")
     if not ok then return false, err end
-    return atomic_write_text(paths.pending_data_schema, tostring(schema_version or 2) .. "\n")
+    local schema_ok, schema_err = atomic_write_text(
+        paths.pending_data_schema, tostring(schema_version or 2) .. "\n")
+    if not schema_ok then return false, schema_err end
+    return atomic_write_text(paths.pending_data_layout,
+        tostring(layout or "legacy-three-database") .. "\n")
 end
 
 function Updater.applyPendingDataUpdate()
@@ -1210,7 +1315,7 @@ function Updater.applyPendingDataUpdate()
 
     local version = pending_data_version(paths)
     if not version then return true, nil end
-    local valid, err, staged_schema = validate_staged_data(paths, version)
+    local valid, err, staged_schema, staged_layout = validate_staged_data(paths, version)
     if not valid then
         discard_pending_data(paths)
         return false, "pending database update was rejected: " .. tostring(err)
@@ -1220,6 +1325,11 @@ function Updater.applyPendingDataUpdate()
         discard_pending_data(paths)
         return false, "pending database schema state does not match its manifest"
     end
+    local pending_layout = read_first_line(paths.pending_data_layout)
+    if pending_layout and pending_layout ~= staged_layout then
+        discard_pending_data(paths)
+        return false, "pending database layout state does not match its manifest"
+    end
     if not ensure_directory(paths.wordwise) or not ensure_directory(paths.databases) then
         return false, "cannot create Word Wise database directory"
     end
@@ -1227,8 +1337,11 @@ function Updater.applyPendingDataUpdate()
     if not backed_up then return false, backup_err end
     local marked, mark_err = atomic_write_text(paths.data_install_state, version .. "\n")
     if not marked then return false, mark_err end
+    local staged_specs = data_specs_for_layout(staged_layout)
+    local staged_names = {}
+    for _, spec in ipairs(staged_specs) do staged_names[spec.name] = true end
 
-    for _, spec in ipairs(DATA_FILES) do
+    for _, spec in ipairs(staged_specs) do
         local replaced, replace_err = atomic_replace(
             paths.staged_data .. "/" .. spec.name,
             paths.databases .. "/" .. spec.name)
@@ -1240,6 +1353,19 @@ function Updater.applyPendingDataUpdate()
                 message = message .. "; rollback failed: " .. tostring(rollback_err)
             end
             return false, message
+        end
+    end
+
+    for _, spec in ipairs(ALL_DATA_FILES) do
+        if not staged_names[spec.name] then
+            local obsolete = paths.databases .. "/" .. spec.name
+            if lfs.attributes(obsolete, "mode") == "file" and not os.remove(obsolete) then
+                local rollback_ok, rollback_err = restore_database_backup(paths)
+                if rollback_ok then pcall(os.remove, paths.data_install_state) end
+                local message = "cannot remove obsolete database: " .. spec.name
+                if not rollback_ok then message = message .. "; rollback failed: " .. tostring(rollback_err) end
+                return false, message
+            end
         end
     end
 
@@ -1398,7 +1524,7 @@ local function install_release(release, data_only)
             if not ok then cleanup_downloads(paths, false) show_error(err) return end
         end
 
-        local staged_data_schema
+        local staged_data_schema, staged_data_layout
         if assets.has_data then
             ok, err = download_file(
                 assets.data_url, paths.data_archive, Config.max_data_archive_bytes)
@@ -1411,9 +1537,11 @@ local function install_release(release, data_only)
             if not ok then cleanup_downloads(paths, false) show_error(err) return end
             ok, err = extract_data_release(paths.data_archive, paths.staged_data)
             if not ok then cleanup_downloads(paths, false) show_error(err) return end
-            ok, err, staged_data_schema = validate_staged_data(paths, version)
+            ok, err, staged_data_schema, staged_data_layout =
+                validate_staged_data(paths, version)
             if not ok then cleanup_downloads(paths, false) show_error(err) return end
-            ok, err = mark_pending_data(paths, version, staged_data_schema)
+            ok, err = mark_pending_data(
+                paths, version, staged_data_schema, staged_data_layout)
             if not ok then cleanup_downloads(paths, false) show_error(err) return end
         end
 
@@ -1487,12 +1615,18 @@ function Updater.check()
             local data_only = false
             local release = Updater.selectRelease(
                 releases, installed_version(), Updater.includesPrereleases())
-            if not release then
+            local assets = release and Updater.releaseAssets(release) or nil
+            if release and assets and not assets.has_code and assets.has_data then
+                -- A newer data-only release is the second half of the bridge
+                -- migration; it must be installable without replacing code.
+                data_only = true
+            elseif not release then
                 local data_needed = Updater.databaseUpdateNeeded(installed_version(), true)
                 if data_needed then
                     release = Updater.selectCurrentRelease(
                         releases, installed_version(), Updater.includesPrereleases())
                     data_only = release ~= nil
+                    assets = release and Updater.releaseAssets(release) or nil
                 end
                 if not release then
                     UIManager:show(InfoMessage:new{
@@ -1504,7 +1638,7 @@ function Updater.check()
                     return
                 end
             end
-            local assets = Updater.releaseAssets(release)
+            assets = assets or Updater.releaseAssets(release)
             local installable = (data_only and assets.has_data)
                 or (not data_only and assets.has_code)
             if not installable then
@@ -1614,8 +1748,9 @@ function Updater.restorePreviousVersion()
                 if data_version ~= "unknown" and data_version ~= "mixed" then
                     local missing = read_missing_database_set(paths)
                     local backup_schema = read_data_backup_schema(paths)
+                    local backup_specs = data_specs_for_layout(read_data_backup_layout(paths))
                     local detected_schema
-                    for _, spec in ipairs(DATA_FILES) do
+                    for _, spec in ipairs(backup_specs) do
                         local backup = paths.data_backup .. "/" .. spec.name
                         if lfs.attributes(backup, "mode") == "file" then
                             local valid, validation_err = validate_sqlite_database(
@@ -1641,7 +1776,8 @@ function Updater.restorePreviousVersion()
                 end
                 local ok, err = reset_directory(paths.data_restore_rollback)
                 if not ok then show_error(err) return end
-                for _, spec in ipairs(DATA_FILES) do
+                local current_specs = data_specs_for_installed(paths)
+                for _, spec in ipairs(current_specs) do
                     local current = paths.databases .. "/" .. spec.name
                     if lfs.attributes(current, "mode") ~= "file" then
                         show_error(_("Current database is missing: ") .. spec.name)
@@ -1653,7 +1789,7 @@ function Updater.restorePreviousVersion()
                 end
                 local data_ok, data_err = restore_database_backup(paths)
                 if not data_ok then
-                    for _, spec in ipairs(DATA_FILES) do
+                    for _, spec in ipairs(current_specs) do
                         pcall(atomic_replace,
                             paths.data_restore_rollback .. "/" .. spec.name,
                             paths.databases .. "/" .. spec.name)

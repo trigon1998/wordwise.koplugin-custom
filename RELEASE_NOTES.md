@@ -1,91 +1,140 @@
-# Word Wise 2026.07.1-rc1.4.5
+# Word Wise 2026.07.1 — Unified CEFR rollout
 
-## Coverage and display-policy correction
+## RC1.4.6 — code-only bridge
 
-RC1.4.5 bổ sung coverage override đã review cho `dawdle`, với bản dịch tiếng Việt có nguồn Wiktionary là `lãng phí thời gian`. Các dạng `dawdling`, `dawdled` và `dawdles` được ánh xạ qua `irregular_forms` về lemma `dawdle`, nên runtime có thể hiển thị entry khó khi gặp dạng biến cách trong sách.
+RC1.4.6 là bản phát hành **chỉ có plugin code**, không chứa database archive.
+Mục tiêu của release này là đưa updater trên thiết bị lên phiên bản hiểu được
+layout unified trước khi nhận database mới. Người dùng đang ở RC1.4.5 hoặc cũ
+hơn phải cài RC1.4.6 và khởi động lại KOReader trước khi cài database unified.
 
-Builder trước đây chỉ tái phân loại các entry đã có trong Word Wise database; nó không thêm các lemma khó nhưng bị thiếu dù chúng xuất hiện trong nguồn CEFR fallback. RC1.4.5 bổ sung đường additive coverage có kiểm soát: chỉ thêm row có English gloss, Vietnamese gloss, POS, difficulty evidence và source URL được review; không tự sinh bản dịch.
+Updater RC1.4.6 giữ tương thích với database legacy gồm ba file và đồng thời
+nhận contract mới `unified-single-database`. Validator chọn layout từ manifest,
+kiểm tra đúng số record, schema/object/table, checksum, SQLite integrity và
+translation/count metadata. Archive có file lạ, path lạ, archive mixed layout,
+record trùng hoặc cờ user-data đều bị từ chối.
 
-Runtime cũng không còn tạo inline bilingual hint cho entry chỉ có English gloss. Điều này ngăn các hint như `a safe sheltered place` của `haven` xuất hiện tự động khi không có bản dịch tiếng Việt đã review. Các entry English-only vẫn có thể được tra thủ công nếu cần.
+Updater cũng hỗ trợ release data-only. Khi database mới có version cao hơn version
+plugin hiện tại nhưng đã được bridge xác thực, plugin coi bundle đó là database
+mới nhất hợp lệ thay vì buộc người dùng tải lại code.
 
-## RC1.4.4 Bridge updater: capability negotiation and code-only bootstrap
+## RC1.4.7 — unified CEFR-only database
 
-RC1.4.4 là bridge release chỉ cập nhật plugin code. Updater quảng bá khả năng hỗ trợ database schema-v2/schema-v3, tách validator theo layout thực tế, chấp nhận release code-only và lưu schema version trong pending/backup state. Vì vậy, thiết bị cũ có thể cài bridge trước mà không bị buộc phải xác thực database schema-v3 bằng validator cũ.
-
-Manifest database hiện hỗ trợ `database_schema` và `minimum_updater_schema`. Schema-v2 tiếp tục dùng cho bootstrap legacy-safe; schema-v3 tương lai có thể đặt `sense2_context_keywords` trực tiếp trong `entries`. Updater chỉ cho phép schema đã khai báo, kiểm tra layout cột/object/table, checksum, SQLite integrity, manifest và các cờ bảo vệ user data. Không có database asset được đính kèm trong bridge release này.
-
-
-## Database expansion and hybrid difficulty
-
-The reviewed data expansion is shipped in the RC1.4.5 schema-v2 database asset. It adds **538 exact Vietnamese gloss overrides**, **92 reviewed phrase/collocation rows**, and one reviewed `dawdle` coverage entry with three inflection mappings. General therefore increases from 48 to 679 entries with a non-empty Vietnamese gloss and from 0 to 92 phrase entries.
-
-Economics and Physics retain their existing domain-reviewed glosses and sense/context mappings. General gloss overrides are domain-scoped and are not copied into Economics or Physics merely because a term is shared. Three existing alternate senses with direct Wiktionary translations are also filled: Economics `beta`, and Physics `inflation` and `infrared`. Other missing alternate glosses remain blank rather than receiving guessed text.
-
-The builder now applies the approved hybrid difficulty rule:
+Database release tiếp theo gộp General, Economics và Physics vào **một file duy
+nhất**:
 
 ```text
-final_difficulty = min(CEFR difficulty, frequency difficulty)
+koreader/wordwise/databases/wordwise.db
 ```
 
-The frequency signal uses wordfreq 3.1.1 Zipf scores with term/lemma normalization. Phrase scoring is conservative and uses the least frequent known token; Zipf 0 falls back to CEFR only. Numeric/ordinal filtering, proper-name/POS exceptions and curated overrides are preserved.
+`domain` vẫn được giữ trong entries để audit và context-aware selection, nhưng
+không còn database selector trong giao diện. Archive database có allow-list exact
+ba member:
 
-## Wiktionary provenance
+```text
+WordWise_Databases_README.txt
+manifest.json
+koreader/wordwise/databases/wordwise.db
+```
 
-The new gloss and phrase rows are adapted selections from English Wiktionary. Each override retains a source-page URL. The legacy-safe database archive does not include a separate top-level attribution file. `WordWise_Databases_README.txt` contains the CC BY-SA 4.0/GFDL attribution, applicable ShareAlike/transparent-copy obligations, official dump reference and extraction changes; `manifest.json` repeats the license and source attribution fields.
+File SHA-256 nằm ngoài ZIP như companion release asset. Archive không chứa
+`known_words.db`, reading progress, book settings, sidecar, highlight hoặc note.
 
-Unreviewed Wiktionary, ACL, EAWL and SWL candidates remain outside the runtime database. No Vietnamese translation text is generated by the import pipeline. Final publication should retain the attribution notice and undergo an explicit distribution-license review.
+### CEFR là difficulty authority duy nhất
 
-Sources:
+Published `difficulty` không còn bị ảnh hưởng bởi wordfreq. Mapping duy nhất là:
 
-- [English Wiktionary](https://en.wiktionary.org/)
-- [Official English Wiktionary dumps](https://dumps.wikimedia.org/enwiktionary/)
-- [Wiktionary copyrights](https://en.wiktionary.org/wiki/Wiktionary:Copyrights)
-- [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.en)
-- [GNU Free Documentation License](https://www.gnu.org/licenses/fdl-1.3.html)
+| CEFR | Difficulty |
+|---|---:|
+| A1 | 5 |
+| A2 | 4 |
+| B1 | 3 |
+| B2 | 2 |
+| C1/C2 | 1 |
 
-## Context-aware behavior retained
+Direct CEFR evidence được ưu tiên. Words-CEFR-Dataset chỉ làm fallback
+lexical-POS khi không có direct evidence. Khi nhiều level cùng xuất hiện, builder
+lấy evidence khó nhất để không làm understated một từ khó. Phrase sử dụng bucket
+khó nhất của các token có CEFR evidence đầy đủ; phrase thiếu evidence cho bất kỳ
+token nào không được thêm theo đường tự động. Numeric và ordinal noise tiếp tục bị
+loại.
 
-RC1.4.5 retains the RC1.3.9 runtime behavior that moved context awareness from candidate filtering/ranking to **actual sense and gloss selection**. For entries with reviewed alternate context metadata, `ContextScorer` scores primary and alternate keywords in the prepared ±10-token context window. The alternate wins only on strict positive evidence; ties, zero evidence, missing metadata and legacy schema-v2 entries remain on the primary gloss.
+Wordfreq đã được tách khỏi production builder. Các công cụ audit wordfreq nếu còn
+trong workspace chỉ phục vụ phân tích chất lượng, không được ghi vào published
+bucket hoặc dùng để override CEFR.
 
-`main.lua` renders the selected English/Vietnamese pair while the popup preserves the other possible sense. The runtime supports schema v3 with append-only `sense2_context_keywords` and falls back to schema v2 databases. The updater accepts both layouts.
+### Coverage và bản dịch
 
-## Compatibility and safety
+Coverage `dawdle` được review với bản dịch tiếng Việt `lãng phí thời gian`, nguồn
+Wiktionary, CEFR C2 và các mapping `dawdled`, `dawdling`, `dawdles` về lemma này.
+Bản dịch tiếng Việt không được tự sinh. Entry English-only vẫn có thể tra thủ
+công nhưng không tạo automatic bilingual inline hint.
 
-The Full OTA remains database-only for user data purposes. It does not include `known_words.db`, reading progress, book sidecars or other per-user files. Existing backup, checksum, manifest, SQLite integrity and restart-time replacement protections remain in place.
+### Context-aware selection
 
-The database asset name is `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly. The correction release uses build version `2026.07.1-rc1.4.5` for both code and schema-v2 data assets. It preserves the bridge capability contract and the schema-v3 migration path introduced by RC1.4.4.
+Runtime trả về nhiều candidates cho một term trong unified DB và nạp
+`sense2_context` theo cả `term` và `domain`. Context scorer chấm primary/alternate
+sense trong cửa sổ từ xung quanh. Alternate chỉ thắng khi có evidence dương và
+mạnh hơn primary. Nếu các gloss Việt khác nhau có cùng context score và priority,
+runtime fail-closed thay vì dùng thứ tự alphabetic của domain để đoán.
+
+### Quick Tap
+
+Quick Tap được thu gọn thành một `ButtonDialog` compact với đúng hai hành động:
+
+| Hành động | Kết quả |
+|---|---|
+| **Đã biết** | Ghi lemma vào known-word scope `*` |
+| **Mở từ điển** | Gọi dictionary lookup của KOReader |
+
+Không còn bảng detail full-screen và không còn action chọn domain.
+
+## Migration and rollback safety
+
+Database install là staged và chỉ hoàn tất sau khi KOReader restart. Updater backup
+layout/schema hiện tại, validate database mới trước khi thay thế, dùng atomic file
+replacement và dọn các file database legacy chỉ sau khi file unified đã được đặt
+thành công. Nếu install bị gián đoạn hoặc một replacement thất bại, layout cũ
+được restore từ backup. Pending/backup state lưu layout để không nhầm unified với
+legacy.
+
+Known words và dữ liệu đọc không bị xóa. Runtime unified coi các record global
+`*`, `unified` và các scope General/Economics/Physics cũ là đã biết, nhờ vậy lựa
+chọn của người dùng từ các bản trước được bảo toàn.
 
 ## Verification
 
-The candidate passed Lua parse and regression tests for main behavior, context selection, schema-v2 side-table context, capability negotiation, schema-v3 manifest validation, code-only bridge asset selection and translated-selection gating. Code and data release verification passed allow-list, manifest, per-database SHA-256, archive SHA-256, SQLite integrity, coverage entry and inflection mapping checks.
+Đã kiểm tra:
 
-Representative candidate counts are:
+- Lua parse toàn bộ file runtime;
+- main behavior, context scorer, legacy schema và unified schema regression;
+- single-result DB API fail-closed khi có nhiều domain candidates;
+- Quick Tap có đúng một row và hai action;
+- unified manifest một record và legacy manifest ba record;
+- rejection của mixed/unknown archive layout;
+- CEFR mapping A1–C2, direct-over-fallback, hardest-evidence aggregation và wordfreq invariant;
+- unified database 76,310 entries, 21 aliases, 18 irregular mappings và 79 side-table context mappings;
+- ZIP exact 3 files, manifest/hash/counts/schema, SQLite integrity và coverage `dawdle`.
 
-| Database | Entries | Vietnamese glosses | Phrases | Sense2 Vietnamese glosses |
-|---|---:|---:|---:|---:|
-| General | 25,496 | 679 | 92 | 0 |
-| Economics | 25,649 | 348 | 238 | 25 |
-| Physics | 25,620 | 352 | 192 | 46 |
+## Provenance
 
-RC1.4.5 remains a prerelease. Test the `dawdling` case and confirm that English-only hints such as `haven` are suppressed at every hint level before replacing the public RC1.3.9 release.
+Wiktionary-derived material là adapted/curated selection có source URL và review
+status. `WordWise_Databases_README.txt` và `manifest.json` giữ attribution cho
+CC BY-SA 4.0/GFDL; final distribution vẫn phải xem xét nghĩa vụ ShareAlike và
+transparent-copy theo từng nguồn.
+
+Sources:
+
+1. [English Wiktionary](https://en.wiktionary.org/)
+2. [Wiktionary copyrights](https://en.wiktionary.org/wiki/Wiktionary:Copyrights)
+3. [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.en)
+4. [GNU Free Documentation License](https://www.gnu.org/licenses/fdl-1.3.html)
+5. [Open Language Profiles CEFR-J](https://github.com/openlanguageprofiles/olp-en-cefrj)
+6. [Words-CEFR-Dataset](https://github.com/Maximax67/Words-CEFR-Dataset)
 
 ## Previous releases
 
-RC1.3.9 introduced actual context-aware sense/gloss selection.
-
-RC1.3.8 introduced bounded runtime caches and the CEFR-A database selection policy.
-
-RC1.3.7 introduced the CEFR-A database selection policy.
-
-RC1.3.6 introduced the top-edge hint fallback for words near the top of the screen.
-
-RC1.3.5 introduced the upstream-style renderer and automatic 180% interline spacing.
-
-## References
-
-1. [English Wiktionary](https://en.wiktionary.org/)
-2. [Official English Wiktionary dumps](https://dumps.wikimedia.org/enwiktionary/)
-3. [Wiktionary copyrights](https://en.wiktionary.org/wiki/Wiktionary:Copyrights)
-4. [Open Language Profiles CEFR-J Vocabulary Profile](https://github.com/openlanguageprofiles/olp-en-cefrj)
-5. [Words-CEFR-Dataset and Octanove profile](https://github.com/Maximax67/Words-CEFR-Dataset)
-6. [Word Wise repository](https://github.com/trigon1998/wordwise.koplugin-custom)
+RC1.4.5 corrected reviewed `dawdle` coverage and suppressed English-only automatic
+hints. RC1.4.4 introduced the code-only bridge capability contract. RC1.4.3
+restored the schema-v2 legacy-safe data contract. RC1.3.9 introduced actual
+context-aware sense/gloss selection, and RC1.3.6 introduced top-edge hint
+fallback.

@@ -1,416 +1,211 @@
-# Technical reference and release history
+# Word Wise — Technical Reference
 
-> This document preserves the detailed README that existed before the public landing page was simplified. The main [README](../README.md) is the recommended starting point for users.
+Tài liệu này mô tả kiến trúc và contract phát hành của fork Word Wise cho KOReader
+2026.03 “Snowflake”. README là tài liệu sử dụng; file này dành cho bảo trì,
+kiểm thử và phát hành.
 
-# Word Wise English–Vietnamese for KOReader
+## Repository boundary
 
-Maintenance fork of the KOReader Word Wise overlay, targeting KOReader 2026.03
-“Snowflake” on Android and the iReader Ocean 5 Pro. The Git source tree remains
-code-only; verified dictionary databases are distributed as a separate Full OTA
-Release asset.
-
-Current plugin candidate version: `2026.07.1-rc1.4.5` coverage correction.
-
-Release repository:
-[`trigon1998/wordwise.koplugin-custom`](https://github.com/trigon1998/wordwise.koplugin-custom).
-
-## Important repository status
-
-This Git source tree deliberately contains no dictionary database and no user
-data. GitHub Releases may attach a separately verified database-only asset. On
-the device, the custom databases remain under:
-
-```text
-<KOReader data>/wordwise/databases/
-```
-
-Known words remain under:
+Git repository chứa **plugin code**. Dictionary data được phát hành như
+release asset riêng. Dữ liệu người dùng không được commit và không được đưa vào
+archive:
 
 ```text
 <KOReader data>/wordwise/known_words.db
+<KOReader data>/wordwise/databases/
+KOReader book settings, progress, highlights, notes and sidecars
 ```
 
-Per-book settings remain in KOReader sidecars.
-
-The upstream repository does not publish an explicit open-source license. The
-repository owner confirms private permission from the upstream author to
-modify and redistribute this code-only fork. See [NOTICE.md](NOTICE.md) for the
-scope of that notice.
-
-## RC1.4.5 Coverage and Display-Policy Correction
-
-RC1.4.5 retains the RC1.4.4 bridge capabilities and adds a reviewed coverage path for missing difficult lemmas. The builder previously iterated only over entries already present in the current Word Wise databases, so a CEFR hit such as `dawdle` could not create a missing entry. RC1.4.5 adds source-backed coverage overrides and inflection mappings, allowing `dawdling` to resolve to `dawdle` without generating Vietnamese text.
-
-The updater continues to support the manifest fields `database_schema` and `minimum_updater_schema`, explicit v2/v3 layouts, code-only bridge releases and schema-aware rollback state. Runtime hint creation now requires a non-empty reviewed Vietnamese gloss, so English-only rows remain available for manual lookup but are not rendered as automatic bilingual hints.
-
-## RC1.4.3 OTA Schema-v2 Bootstrap
-
-RC1.4.1 attempted to permit a top-level `WIKTIONARY_ATTRIBUTION.md` auxiliary file, but that change could not help an older updater because the older client validates the database archive before installing new updater code. RC1.4.2 removed that extra file from the published bundle. RC1.4.3 additionally restored the physical schema-v2 data layout required by the oldest updater validator. RC1.4.4 added the bridge capability contract and code-only path; RC1.4.5 adds the reviewed coverage correction and translated-selection gate. All unlisted files remain rejected, and user data is never an archive target.
-
-## RC1.4.0 Wiktionary Expansion and Hybrid Difficulty
-
-RC1.4.0 keeps the RC1.3.9 runtime sense-selection contract and expands the General data in a separate database-only candidate. The builder imports 538 exact Vietnamese gloss overrides from English Wiktionary and 92 phrase rows from a manually curated first batch. General rises from 48 to 678 entries with non-empty Vietnamese glosses and from 0 to 92 phrases. General overrides are domain-scoped; they are not applied to Economics or Physics merely because a term is shared.
-
-The Wiktionary extraction stores a source URL per override and ships `WIKTIONARY_ATTRIBUTION.md` with the database bundle. Unreviewed Wiktionary, ACL, EAWL and SWL queues remain outside the runtime data. The extraction pipeline does not generate Vietnamese text. The release candidate is an adapted selection of Wiktionary material and therefore retains CC BY-SA 4.0/GFDL attribution, applicable ShareAlike/transparent-copy obligations, and the source links required for audit.
-
-Three existing alternate senses that had a reviewed English/Vietnamese match in Wiktionary now receive a Vietnamese alternate gloss: Economics `beta`, and Physics `inflation` and `infrared`. The remaining nine sense2 rows without a sufficiently direct Wiktionary translation remain unchanged rather than receiving guessed text.
-
-The candidate database builder applies the approved hybrid difficulty policy: `min(CEFR difficulty, frequency difficulty)`, wordfreq 3.1.1 Zipf scores with term/lemma normalization, CEFR-only fallback for Zipf 0, conservative phrase handling, and preserved numeric/POS/proper-name/domain exceptions. The candidate archive is named `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly.
-
-## RC1.3.9 Context-Aware Sense/Gloss Selection
-
-RC1.3.9 completes the context-aware behavior that earlier releases only applied at candidate filtering/ranking level. `main.lua` now passes the prepared ±10-token context to `ContextScorer.acceptPrepared()`, captures the selected gloss and sense kind, and renders that selected English/Vietnamese pair. The popup preserves the primary and alternate glosses and labels the non-selected one as the other possible sense.
-
-`context_scorer.lua` scores primary `context_keywords` and reviewed alternate `sense2_context_keywords` independently. An alternate sense wins only when it has a strict positive score greater than the primary score; ties, zero evidence, missing alternate metadata and legacy entries all remain on the primary gloss. Required-context entries still fail closed when neither sense has evidence.
-
-The database runtime probes for `sense2_context_keywords` and explicitly selects either the schema-v3 column or the legacy schema-v2 query. The updater accepts both physical entries layouts, while new candidate databases use schema version 3 with the append-only column. The data package contains 83 reviewed context mappings: 28 Economics and 55 Physics. RC1.4.0 adds only three Wiktionary-sourced alternate Vietnamese glosses to existing sense2 rows; no Vietnamese translation is generated automatically.
-
-The behavior is covered by context scorer tests for primary/alternate/tie/zero fallback, main tests for rendering a selected alternate gloss, database tests for schema-aware prepared statements, and the existing updater/full-archive checks.
-
-## RC1.3.8 Performance OTA and RC1.3.7 CEFR-A Database Update
-
-RC1.3.8 keeps the RC1.3.6 top-edge fallback: difficult words at the physical
-top edge remain eligible for a visible hint instead of being clipped or
-silently dropped. The renderer tries normal above-word placement first, clamps
-small overflows when the downward caret can remain above the target, then falls
-back below the word with an upward caret when there is no safe room above.
-
-The fallback participates in two-dimensional collision checks so it cannot
-overlap a neighboring hint in the same interline band. A hint is hidden only
-when neither above nor below placement fits inside the screen-safe bounds.
-
-The RC1.3.8 database bundle applies the approved CEFR-A policy. CEFR-J v1.5 and
-Octanove C1/C2 v1.0 are the primary labels; Words-CEFR-Dataset is a filtered
-lexical-POS fallback. Existing domain-curated/manual overrides remain eligible,
-while number/ordinal tokens and entries without sufficient CEFR evidence are
-excluded. Runtime difficulty maps A1 to 5, A2 to 4, B1 to 3, B2 to 2, and C1/C2
-to 1 because the plugin schema has five buckets.
-
-The candidate contains 25,403 General entries, 25,649 Economics entries and 25,620 Physics entries. It retains the existing reviewed Vietnamese glosses (48, 348 and 352 respectively) and does not generate new translations. RC1.3.8 also adds bounded visible-page/token caches, prepared context scoring, and bounded gloss-width measurement caches. The RC1.3.9 full four-asset OTA contract is synchronized at `2026.07.1-rc1.3.9`; the SQLite metadata, manifest counts and checksums are verified before release.
-
-## RC1.3.5 Upstream-Style Hint Renderer OTA Test
-
-RC1.3.5 abandons the RC1.3.4 target-glyph measurement experiment and returns
-to the simpler renderer strategy used by `asxelot/wordwise.koplugin`.
-
-The plugin now reserves a stable 180% interline band, uses font-level gloss
-metrics, draws a horizontal rule with a fixed downward caret, centers the
-complete hint unit in the raised leading, and clamps long glosses to the real
-text column. Placement no longer has a target-measurement failure path.
-
-Dictionary rows remain unchanged from RC1.3.4; only matching database build
-metadata advances for the four-asset Full OTA test.
-
-## RC1.3.4 Hint Vertical Alignment Round 2 OTA Test
-
-RC1.3.4 removes the RC1.3.3 line-spacing estimate that remained too high on
-the iReader. It measures the target word with the active book face, centers
-the measured glyph height inside the CRE box, and anchors the gloss directly
-above that estimate.
-
-Compact or top-screen hints fail closed when safe placement is impossible.
-Dictionary rows remain unchanged from RC1.3.3; only matching database build
-metadata advances for the four-asset Full OTA test. PR #5 remains draft until
-the same page is validated on-device.
-
-## RC1.3.3 Hint Vertical Alignment OTA Test
-
-RC1.3.3 moves inline glosses down toward the word they explain when raised
-line spacing provides sufficient room. It never moves a compact-line gloss
-upward relative to RC1.3.2, shortens the caret to the available gap, and hides
-a hint when it cannot fit safely at the top of the screen.
-
-The dictionary rows are unchanged from RC1.3.2. The matching database package
-advances build metadata only so the complete four-asset OTA path can be tested.
-The release remains a prerelease and PR #5 remains unmerged until on-device
-validation is complete.
-
-## RC1.3.2 Bootstrap Compatibility Hotfix
-
-RC1.3.1 accidentally placed the repository-only `DATA_MAINTENANCE.md`
-document inside the runtime plugin ZIP. RC1.3.0 and older updaters correctly
-rejected that unknown path because their archive allow-list is fixed. RC1.3.2
-restores the exact legacy plugin ZIP file set. The document remains available
-in this source repository but is never installed on the reader.
-
-After the RC1.3.2 code update and restart, the Full OTA updater downloads the
-matching RC1.3.2 database package. Its reviewed dictionary content is unchanged
-from RC1.3.1; only release/build metadata is advanced so the tag, plugin,
-manifest and SQLite databases match exactly.
-
-## RC1.3.1 Data Integrity Emergency Fix
-
-RC1.3.1 fixes a systemic defect in the custom English–Vietnamese data build:
-the old pipeline overwhelmingly selected the first StarDict sense even when
-the English gloss requested a different sense or part of speech. This caused
-unrelated results such as `appealing → van lơn`. A separate morphology bug
-could also reduce `gaming` to the unrelated noun `gam`.
-
-The maintenance release deliberately fails closed:
-
-- only exact-sense translations reviewed by a human or the separately curated
-  Economics/Physics rows are displayed in Vietnamese;
-- unreviewed General translations and unverified POS values are quarantined,
-  while their English definitions remain available;
-- the reviewed database pack contains 48 Vietnamese General entries, 348
-  Economics entries and 352 Physics entries;
-- `gaming` has an exact, context-gated Economics entry and regular morphology
-  accepts only one POS-valid lemma;
-- case-sensitive acronyms such as `BOP`, `ROE`, `EFT` and `GUT` now beat their
-  unrelated lowercase words;
-- aliases with multiple targets fail closed, scientifically incorrect aliases
-  are removed, and domain aliases hidden by exact General rows are promoted;
-- 135 orphan irregular mappings and two wrong-POS mappings are removed from
-  each database;
-- 18 hyphenated entries have corrected phrase lengths, so terms such as
-  `half-life` and `bid-ask spread` can be matched again;
-- malformed English glosses and several reviewed domain terminology errors are
-  corrected by explicit, version-controlled overrides.
-
-The database pack remains separate from the plugin code ZIP, but both are now
-part of the same Full OTA GitHub Release. The updater downloads and verifies
-all four required assets before changing code or staging database replacement.
-The pack contains no `known_words.db` and no book sidecars.
-
-### RC1.3.1 Full OTA bootstrap
-
-- Devices already running the RC1.3.1 updater or a later version download code
-  and all three databases in one update operation, then finish database
-  replacement on restart before any SQLite connection opens.
-- RC1.3.0 and older code-only updaters first install the RC1.3.1 code ZIP. After
-  restart, RC1.3.1 detects the unsynchronized database bundle and offers the
-  matching database asset. This one-time two-stage bootstrap is unavoidable
-  because the old updater does not know that a data asset exists.
-- Every database is checked against the outer ZIP checksum, the inner manifest
-  SHA-256, SQLite integrity/foreign-key checks, schema/domain/build metadata and
-  manifest counts.
-- An interrupted database replacement is restored from backup before retrying.
-- `known_words.db` and per-book sidecars are never accepted archive paths.
-
-See [DATA_MAINTENANCE.md](DATA_MAINTENANCE.md) for the reproducible audit,
-quarantine and packaging workflow.
-
-## RC1.3.0 Battery Optimization
-
-RC1.3.0 reduces avoidable CPU and SQLite work while preserving the RC1.2
-rendering and data behavior:
-
-- coalesces back-to-back KOReader position/page events into one hint scan on
-  the next UI tick;
-- builds a compact, lazy first-word index for the 2–5-word phrases in the
-  active database;
-- attempts only phrase lengths that can actually begin with the visible word;
-- includes multi-word aliases in the phrase index;
-- ignores irregular mappings whose target entry does not exist;
-- closes one-shot phrase-index statements after the index is built;
-- exposes opt-in counters under **Word Wise → Performance counters** and
-  **Diagnostics**.
-
-Word Wise still scans only the currently visible page. RC1.3.0 does not limit
-coverage to one paragraph because that would remove hints from other visible
-paragraphs. No battery percentage claim is made until the build is measured on
-the target reader.
-
-The active dictionary remains lazy-loaded. Database files, `known_words.db`
-and per-book settings are not migrated or replaced.
-
-Use [PERFORMANCE_TEST.md](PERFORMANCE_TEST.md) for the controlled on-device
-comparison against RC1.2.2.
-
-## RC1.2.2 OTA Test
-
-RC1.2.2 is a deliberately minimal successor to RC1.2.1 for validating the
-complete on-device update path:
+Runtime data path mới là:
 
 ```text
-RC1.2.1 → Check for updates → RC1.2.2 → Restart KOReader
+<KOReader data>/wordwise/databases/wordwise.db
 ```
 
-It changes version and distribution metadata only. Runtime behavior, database
-formats, known words and per-book settings remain unchanged.
+## Unified database contract
 
-## RC1.2.1 Updater Bootstrap (historical)
+Release data gộp các source General, Economics và Physics thành một SQLite
+`wordwise.db`. `entries.domain` vẫn tồn tại để giữ provenance, domain-specific
+sense và context keywords, nhưng đây là metadata nội bộ; không có domain selector
+trong user-facing workflow.
 
-RC1.2.1 introduced the original manual, code-only GitHub Releases updater:
+| Thuộc tính | Contract |
+|---|---|
+| Database files | Một file `wordwise.db` |
+| Layout marker | `database_layout=unified-single-database` |
+| Database count | `database_count=1` |
+| Physical schema | Schema-v2 |
+| Context table | `sense2_context(term, domain, context_keywords)` |
+| Entry key behavior | Không giả định `term` globally unique; cùng term khác domain có thể coexist |
+| Runtime lookup | Trả nhiều candidates, chấm context rồi fail-closed khi ambiguous |
+
+Schema-v2 entries có 15 cột theo thứ tự:
 
 ```text
-Word Wise → Updates
+term, lemma, short_en, short_vi, difficulty, pos, domain,
+sense2_en, sense2_vi, context_keywords, phrase_len, priority,
+requires_context, register_label, source
 ```
 
-The updater:
+Bảng `sense2_context` có ba cột và key composite theo `term` + `domain`. Legacy
+schema-v2 side-table chỉ có `term` + `context_keywords` vẫn được runtime đọc để
+duy trì backward compatibility. Schema-v3 với cột context trong `entries` vẫn
+được updater validate cho các database cũ/tương lai, nhưng unified bootstrap
+release dùng schema-v2 để tương thích bridge.
 
-- accesses only a public GitHub `owner/repository`;
-- checks only when the user taps **Check for updates**;
-- requires an exact release ZIP and companion SHA-256 file;
-- rejects unknown, duplicate, oversized and non-regular archive entries;
-- compiles every staged Lua file before installation;
-- checks that the release tag, `_meta.lua` and `update_config.lua` versions
-  match;
-- backs up the currently installed plugin code before replacing files;
-- prompts for a KOReader restart after a successful update;
-- never reads or writes `wordwise/databases`, `known_words.db` or book
-  sidecars. RC1.3.1 extends this design with the separately verified Full OTA
-  database channel described above.
+## Difficulty policy
 
-The first updater-enabled build had to be installed manually. Current builds
-can update code and databases from the Word Wise menu.
+CEFR là **authority duy nhất** của published difficulty:
 
-## Configure the release repository
+| Evidence | Word Wise bucket |
+|---|---:|
+| A1 | 5 |
+| A2 | 4 |
+| B1 | 3 |
+| B2 | 2 |
+| C1/C2 | 1 |
 
-This build defaults to:
+Mapping là `max(1, 6 - cefr_level)`. Nếu một term có nhiều label, builder lấy
+CEFR numerically cao nhất, tức evidence khó nhất. Phrase chỉ được thêm khi mọi
+token có CEFR evidence; bucket phrase là bucket khó nhất của các token.
 
-```lua
-default_repository = "trigon1998/wordwise.koplugin-custom"
-```
+Direct OLP CEFR-J/Octanove evidence được ưu tiên. Words-CEFR-Dataset là
+lexical-POS fallback khi direct evidence vắng mặt. `wordfreq` không còn là
+dependency của production builder và không thể thay đổi published `difficulty`.
+Nếu workspace có công cụ wordfreq audit, công cụ đó chỉ để đo độ lệch/phân tích,
+không được ghi kết quả vào release database.
 
-It can be overridden on the device under:
+Numeric tokens, ordinal terms và unresolved entries bị loại. Coverage override
+chỉ được thêm khi có English gloss, Vietnamese gloss, POS, CEFR evidence, review
+status và source URL. Không tự sinh bản dịch.
+
+## Runtime selection
+
+`wordwise_db.lua` giữ các API legacy `lookupExact` và `lookupWord`, nhưng các API
+single-result này trả `nil` khi có hơn một candidate. API mới
+`lookupCandidates` và `lookupWordCandidates` trả toàn bộ candidates theo thứ tự
+ổn định để `main.lua` chấm:
+
+1. context confidence;
+2. priority;
+3. nếu cùng điểm nhưng gloss Việt khác nhau thì fail-closed, không dùng thứ tự domain để đoán.
+
+`ContextScorer` chấm primary và alternate sense trong context window đã chuẩn bị.
+Alternate chỉ thắng khi score dương và lớn hơn primary. Entry yêu cầu context mà
+không có evidence bị loại. Entry English-only vẫn tra dictionary thủ công nhưng
+không tạo automatic bilingual inline hint.
+
+Coverage `dawdle` có gloss `lãng phí thời gian`, CEFR C2 và mapping:
 
 ```text
-Word Wise → Updates → Repository
+dawdled -> dawdle
+dawdling -> dawdle
+dawdles -> dawdle
 ```
 
-The repository must be public. This bootstrap intentionally does not store a
-GitHub personal access token on the reading device.
+Quick Tap được xây bằng compact `ButtonDialog` với đúng hai action: `Known` và
+`Open dictionary` (được KOReader gettext dịch thành **Đã biết** và **Mở từ điển**
+trong locale tiếng Việt). Known action ghi scope `*`; dictionary action phát
+sự kiện lookup cho surface word. Không có full-screen detail panel và không có
+domain action.
 
-Because the current build is an RC, **Include prerelease/RC updates** defaults
-to enabled. Stable builds default to the stable channel.
+## Updater contract
 
-## Manual installation
-
-1. Exit KOReader completely.
-2. Back up `koreader/plugins/wordwise.koplugin` and the three files under
-   `koreader/wordwise/databases/`.
-3. Extract `wordwise.koplugin-vVERSION.zip` and copy its
-   `wordwise.koplugin` folder into `koreader/plugins/`.
-4. Extract `WordWise_Databases_VERSION.zip` into the directory that already
-   contains `koreader/`.
-5. Do not delete or replace `koreader/wordwise/known_words.db`.
-6. Restart KOReader.
-7. Open **Word Wise → Diagnostics** and verify that plugin and database build
-   versions match.
-
-## Release asset contract
-
-For tag `vVERSION`, the GitHub Release must contain:
-
-```text
-wordwise.koplugin-vVERSION.zip
-wordwise.koplugin-vVERSION.zip.sha256
-WordWise_Databases_VERSION.zip
-WordWise_Databases_VERSION.zip.sha256
-```
-
-The ZIP has one top-level directory:
-
-```text
-wordwise.koplugin/
-├── _meta.lua
-├── main.lua
-├── wordwise_db.lua
-├── known_words.lua
-├── context_scorer.lua
-├── book_classifier.lua
-├── wordwise_updater.lua
-├── update_config.lua
-├── README.md
-└── NOTICE.md
-```
-
-GitHub-generated “Source code” archives are not updater assets. The updater
-selects only the exact filenames above. A release missing any one of the four
-assets is rejected.
-
-The database ZIP has this exact allow-list:
+Updater nhận code ZIP và database ZIP độc lập. Code archive có allow-list cố định
+và không được chứa database. Unified database archive có đúng ba member:
 
 ```text
 WordWise_Databases_README.txt
 manifest.json
-koreader/wordwise/databases/wordwise_general.db
-koreader/wordwise/databases/wordwise_economics.db
-koreader/wordwise/databases/wordwise_physics.db
+koreader/wordwise/databases/wordwise.db
 ```
 
-Any additional path, duplicate, symlink, oversized file, user database or book
-setting makes the update fail closed.
+SHA-256 companion file nằm ngoài ZIP. Manifest unified yêu cầu:
 
-## Build and verify locally
+```json
+{
+  "package_type": "database-only",
+  "database_schema": 2,
+  "database_layout": "unified-single-database",
+  "database_count": 1,
+  "known_words_included": false,
+  "book_settings_included": false
+}
+```
 
-Requirements: Bash, Python 3.12+, `zip`, `unzip`, `sha256sum`, Node.js/npm.
+Manifest legacy ba-record vẫn được nhận để hỗ trợ rollback/thiết bị cũ. Archive
+không được mixed unified/legacy, không được path lạ, duplicate, file attribution
+thừa hoặc member user-data.
+
+### Staged rollout
+
+RC1.4.6 là **code-only bridge**. Nó nâng updater để nhận unified layout nhưng
+không gửi database unified trong cùng archive. Sau khi bridge được cài và
+KOReader restart, release data-only RC1.4.7 mới có thể cài `wordwise.db`.
+
+Flow data install:
+
+1. download ZIP và SHA-256;
+2. verify outer checksum và exact archive allow-list;
+3. extract vào staging;
+4. validate manifest, per-database hash, schema, object allow-list, metadata,
+   counts, SQLite integrity và foreign-key check;
+5. ghi pending version/schema/layout;
+6. sau restart backup layout hiện tại;
+7. atomic replace database mới;
+8. chỉ sau khi replace thành công mới xóa database legacy obsolete;
+9. lưu installed manifest và clear pending state.
+
+Nếu một bước replacement hoặc cleanup thất bại, updater restore backup layout cũ.
+Pending và backup state lưu layout để không nhầm unified với legacy. Known words,
+progress và sidecars không bị backup/restore hoặc xóa bởi database flow.
+
+## Release verification
+
+Code release:
 
 ```bash
-./tools/build_release.sh
-./tools/verify_release.sh
-
-# Build and verify all four Full OTA assets from already-audited databases.
-./tools/build_full_release.sh /path/to/verified/databases
-
-python3 -m py_compile tools/*.py tests/test_data_tools.py
-python3 -m unittest -v tests/test_data_tools.py
-
-for file in ./*.lua; do
-  npx --yes luaparse "$file" >/dev/null
-done
-
-npx --yes --package=fengari-node-cli fengari tests/test_main.lua
-npx --yes --package=fengari-node-cli fengari tests/test_db.lua
-npx --yes --package=fengari-node-cli fengari tests/test_updater.lua
+cd /home/ubuntu/wordwise.koplugin-custom
+for file in ./*.lua tests/*.lua; do npx --yes luaparse "$file" >/dev/null; done
+bash tools/run_lua_tests.sh
+bash tools/build_release.sh
+bash tools/verify_release.sh
 ```
 
-## Creating a GitHub Release
-
-1. Update `version` in `update_config.lua`.
-2. Run all tests.
-3. Build all four assets with `tools/build_full_release.sh` and inspect their
-   checksums.
-4. Commit the release state.
-5. Create and push the matching tag, for example:
-
-   ```bash
-   git tag v2026.07.1-rc1.3.1
-   git push origin main --tags
-   ```
-
-The GitHub Actions workflow verifies the tag/version pair, rebuilds the code
-assets and creates or updates a **draft** Release. It deliberately never makes
-that Release public. Attach the locally verified database ZIP and checksum:
+Data release:
 
 ```bash
-gh release upload vVERSION \
-  dist/WordWise_Databases_VERSION.zip \
-  dist/WordWise_Databases_VERSION.zip.sha256
+cd /home/ubuntu/wordwise-data-work
+python3 test_cefr_only.py
+python3 build_candidate_databases.py
+python3 build_unified_database.py
+python3 validate_unified_database.py
+python3 package_unified_database.py
+python3 verify_unified_bundle.py
 ```
 
-Confirm that the draft contains exactly the four required assets, then publish
-it. The public Releases API never exposes a half-complete draft to devices.
+Verifier unified phải kiểm tra exact ZIP names, manifest một record, archive/db
+SHA-256, byte/count fields, expected tables/indexes/columns, CEFR-only metadata,
+coverage `dawdle` và `PRAGMA integrity_check`.
 
-## Recovery
+## Release history
 
-Before each in-app update, previous code and databases are saved under:
+| Release | Nội dung |
+|---|---|
+| RC1.4.6 | Code-only bridge; updater unified/legacy layout-aware; pending/backup layout metadata; compact Quick Tap; multi-candidate runtime |
+| RC1.4.5 | Reviewed `dawdle` coverage, inflection mappings, English-only inline hint gate |
+| RC1.4.4 | Capability bridge và code-only updater path |
+| RC1.4.3 | Schema-v2 legacy-safe bootstrap |
+| RC1.4.0–RC1.4.2 | Wiktionary expansion, attribution/archive compatibility và data cleanup |
+| RC1.3.9 | Context-aware sense/gloss selection |
+| RC1.3.6 | Top-edge hint fallback |
 
-```text
-<KOReader settings>/wordwise_update/backup/
-<KOReader settings>/wordwise_update/database-backup/
-```
+## Provenance
 
-If the new plugin still loads, use:
+Wiktionary material là adapted/curated selection có source links. Database README
+và manifest giữ CC BY-SA 4.0/GFDL attribution cùng cảnh báo ShareAlike và
+transparent-copy. CEFR sources gồm OLP CEFR-J/Octanove và Words-CEFR-Dataset.
+Trước khi phân phối rộng, cần review nghĩa vụ license cho từng source.
 
-```text
-Word Wise → Updates → Restore previous version
-```
-
-This restores the previous code and, when available, the previous database
-bundle. `known_words.db` and book sidecars are not part of either backup. If
-the plugin does not load, exit KOReader and manually copy both backup sets back
-to their corresponding code/database directories.
-
-## RC1.3.1 scope
-
-- Keeps the verified RC1.2.2 updater, visible-hint tap fix, layout-aware cache
-  and the RC1.3.0 battery optimizations.
-- Adds correctness-first lookup, alias and English-only rendering behavior.
-- Adds reproducible data audit/rebuild tools and regression tests, without
-  committing any database to this Git source tree.
-- Adds a four-asset Full OTA contract with staged database validation,
-  restart-time replacement, interrupted-install recovery and rollback.
-- Keeps the database schema at version 2 and never migrates known words or
-  book sidecars.
+Xem thêm [README](../README.md), [DATA_MAINTENANCE](../DATA_MAINTENANCE.md) và
+[NOTICE](../NOTICE.md).

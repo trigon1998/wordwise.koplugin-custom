@@ -1,148 +1,183 @@
-# Word Wise data maintenance
+# Word Wise — Data Maintenance
 
-RC1.3.1 treats translation correctness as a release invariant. Automated
-similarity is useful for finding review candidates, but it is never sufficient
-to publish a Vietnamese gloss.
+Đây là tài liệu repository-only dành cho người bảo trì database. File này không
+được đưa vào plugin ZIP vì updater dùng allow-list cố định.
 
-## Why the old data was unsafe
+## Nguyên tắc phát hành
 
-The original custom build paired an English gloss with a StarDict headword and
-usually kept the first Vietnamese sense. Part of speech and exact sense were
-not reliably aligned. The source General database contains 16,041 headwords
-with multiple StarDict senses, while 26,549 of 27,173 matched headwords use the
-first sense. This is a systemic provenance problem, not a small typo list.
+Database runtime mới là một SQLite unified:
 
-WordNet and Open Multilingual Wordnet alignment were evaluated as independent
-signals. Even the strictest tested automatic threshold produced false matches
-such as sperm/semen and literal rather than contextual senses. RC1.3.1
-therefore uses those sources for audit suggestions only.
-
-## Release policy
-
-- A General Vietnamese gloss and POS are published only through an explicit
-  row in `data/translation_overrides.tsv`.
-- English-gloss repairs are explicit rows in `data/english_overrides.tsv`.
-- Existing Economics and Physics rows are preserved because they were created
-  as separate curated domain data; explicit domain overrides fix confirmed
-  terminology errors.
-- Unreviewed General rows retain `short_en`, but `short_vi` is empty and `pos`
-  is unknown. This prevents both a wrong translation and unsafe regular
-  deinflection.
-- The 15 surviving irregular mappings have an existing target and a reviewed
-  or WordNet-compatible target POS. Orphans and incompatible targets are
-  deleted.
-- Rejected StarDict glosses are not copied into a hidden audit table in the
-  runtime database. Optional review logs stay outside the data package.
-
-## Audit
-
-The audit is read-only. It checks SQLite integrity, schema invariants, metadata
-counts, aliases, irregular targets, phrase lengths, punctuation balance,
-StarDict POS availability and WordNet/OMW alignment.
-
-```bash
-python3 tools/audit_wordwise_data.py \
-  --database-dir /path/to/source/databases \
-  --stardict-dir /path/to/extracted/stardict \
-  --wordnet-zip /path/to/wordnet.zip \
-  --omw-vie /path/to/wn-wikt-vie.tab \
-  --cache /path/to/stardict-senses.sqlite3 \
-  --output /path/to/audit.json
+```text
+koreader/wordwise/databases/wordwise.db
 ```
 
-The JSON suggestions are a review queue, not publishable translations.
+File này được merge từ ba source database General, Economics và Physics. Trường
+`domain` được giữ nội bộ trong entries và trong `sense2_context` để audit/context
+selection; người dùng không chọn domain.
 
-## Rebuild
+**CEFR là difficulty authority duy nhất.** Published difficulty phải tuân theo:
 
-The output directory must be new or empty. The command refuses to overwrite an
-existing SQLite database or journal/WAL sidecar.
-
-```bash
-python3 tools/rebuild_wordwise_data.py \
-  --source-dir /path/to/source/databases \
-  --output-dir /path/to/new-output \
-  --wordnet-zip /path/to/wordnet.zip \
-  --overrides data/translation_overrides.tsv \
-  --english-overrides data/english_overrides.tsv \
-  --build-version 2026.07.1-rc1.3.1 \
-  --manifest /path/to/rebuild-manifest.json \
-  --review-log-dir /path/to/private-review-logs
+```text
+A1   -> 5
+A2   -> 4
+B1   -> 3
+B2   -> 2
+C1/C2 -> 1
 ```
 
-The rebuild:
+Direct CEFR-J/Octanove evidence được ưu tiên. Words-CEFR-Dataset được dùng làm
+lexical-POS fallback khi direct evidence không có. Mixed labels lấy evidence khó
+nhất. Phrase yêu cầu CEFR evidence cho mọi token và lấy bucket khó nhất của token.
+Numeric/ordinal noise và unresolved entries bị loại.
 
-1. copies each source database to a new destination;
-2. removes any rejected-translation audit table;
-3. repairs reviewed English and Vietnamese rows;
-4. quarantines every unreviewed General VI/POS value;
-5. removes unsafe, ambiguous, one-character and unreachable aliases;
-6. promotes safe domain aliases hidden by General exact entries;
-7. removes orphan/wrong-POS irregular mappings;
-8. corrects phrase lengths using whitespace-visible KOReader tokens;
-9. updates all metadata counts;
-10. runs integrity/foreign-key/schema checks, `ANALYZE`, `VACUUM`, closes and
-    reopens every output to detect a stale SQLite journal or rollback.
+`wordfreq` không được dùng trong production builder để quyết định hoặc override
+published bucket. Nếu dùng công cụ wordfreq audit trong workspace, kết quả chỉ là
+review signal bên ngoài và không được ghi ngược vào database.
 
-## Runtime packaging compatibility
+Bản dịch tiếng Việt chỉ được publish khi có review status, exact sense, POS,
+source URL và gloss đã kiểm tra. Không tự sinh bản dịch. Coverage correction như
+`dawdle` phải giữ source Wiktionary, CEFR evidence và inflections đã review.
 
-`DATA_MAINTENANCE.md` is repository documentation only. It must not be added to
-the runtime plugin ZIP: RC1.3.0 and older deployed updaters use an immutable
-fixed file allow-list. `tools/build_release.sh` and `tools/verify_release.sh`
-therefore deliberately preserve the legacy runtime file set.
+## Workspace layout
 
-## Package
+Các đường dẫn mặc định:
 
-```bash
-python3 tools/build_data_release.py \
-  --database-dir /path/to/new-output \
-  --output-dir /path/to/package-output \
-  --version 2026.07.1-rc1.3.1
+```text
+/home/ubuntu/wordwise-data-work/current/koreader/wordwise/databases/
+/home/ubuntu/wordwise-data-work/candidate/koreader/wordwise/databases/
+/home/ubuntu/wordwise-data-work/candidate-unified/
 ```
 
-The ZIP allow-list is fixed to:
+`current` là source domain databases; `candidate` là ba intermediate CEFR-only
+outputs; `candidate-unified` là authoritative single-file output trước packaging.
+
+## Rebuild và validate
+
+Luôn build trong thư mục output có thể bị xóa/recreate. Không sửa trực tiếp
+SQLite release bằng tay.
+
+```bash
+cd /home/ubuntu/wordwise-data-work
+export WORDWISE_BUILD_VERSION=2026.07.1-rc1.4.7
+export WORDWISE_TARGET_SCHEMA=2
+export WORDWISE_MIN_UPDATER_SCHEMA=2
+python3 test_cefr_only.py
+python3 build_candidate_databases.py
+python3 build_unified_database.py
+python3 validate_unified_database.py
+```
+
+`build_candidate_databases.py` làm CEFR classification và rebuild ba intermediate
+source-domain files. `build_unified_database.py` merge chúng thành một
+`wordwise.db`, giữ domain nội bộ, merge aliases/irregulars và fail khi có conflict
+thực sự. `validate_unified_database.py` kiểm tra schema-v2 physical 15 columns,
+`domain`-aware `sense2_context`, metadata, counts, no numeric/ordinal noise,
+SQLite integrity và coverage regression.
+
+Test builder bắt buộc phải kiểm tra mapping A1–C2, direct-over-fallback, hardest
+mixed evidence, phrase missing-token rejection, wordfreq invariance, dawdle
+translation/source/inflections và numeric exclusion.
+
+## Data package
+
+README attribution nguồn được đặt ngoài output builder tại
+`unified_database_README.txt`, vì builder recreate `candidate-unified`. Đóng gói:
+
+```bash
+python3 package_unified_database.py
+python3 verify_unified_bundle.py
+unzip -l candidate-unified/release/WordWise_Databases_2026.07.1-rc1.4.7.zip
+```
+
+Tên đúng theo packager là:
+
+```text
+WordWise_Databases_<version>.zip
+WordWise_Databases_<version>.zip.sha256
+```
+
+ZIP unified phải có **đúng ba member** và không thêm attribution file thứ ba:
 
 ```text
 WordWise_Databases_README.txt
 manifest.json
-koreader/wordwise/databases/wordwise_general.db
-koreader/wordwise/databases/wordwise_economics.db
-koreader/wordwise/databases/wordwise_physics.db
+koreader/wordwise/databases/wordwise.db
 ```
 
-`known_words.db`, plugin code and book settings cannot enter this package. The
-builder validates all three database hashes, metadata versions and integrity
-before writing the archive and companion SHA-256 file.
+Manifest phải có `package_type=database-only`, `database_schema=2`,
+`database_layout=unified-single-database`, `database_count=1`,
+`known_words_included=false` và `book_settings_included=false`. Record duy nhất
+phải khớp byte count, SHA-256, entry/phrase/alias/irregular/reviewed-Vietnamese
+counts và translation policy.
 
-For a Full OTA release, run:
+`verify_unified_bundle.py` là gate bắt buộc. Không publish nếu fail exact allow-list,
+manifest, database hash, tables/indexes/columns, CEFR-only metadata, coverage,
+SQLite integrity hoặc user-data exclusion.
+
+## Attribution
+
+Wiktionary-derived rows là adapted/curated selection. Mỗi override cần source URL
+và review note. Gói phát hành giữ CC BY-SA 4.0/GFDL notice trong README và
+manifest. Các nguồn CEFR phải được ghi trong metadata và data README. Trước khi
+phân phối rộng, review nghĩa vụ attribution, ShareAlike và transparent-copy cho
+từng nguồn.
+
+## Reviewed correction workflow
+
+Mỗi correction phải ghi tối thiểu:
+
+| Trường | Yêu cầu |
+|---|---|
+| term/lemma | normalized English surface và lemma |
+| domain | `general`, `economics`, `physics` hoặc domain đã định nghĩa |
+| short_en | exact sense ngắn, không mơ hồ |
+| short_vi | gloss Việt đã review, không machine-generated |
+| POS | khớp với sense |
+| CEFR | evidence rõ ràng hoặc coverage CEFR level 1–6 |
+| source | URL/source identifier có thể audit |
+| review_status | `reviewed` hoặc `approved` |
+| inflections | chỉ mapping tới lemma có thật trong entries |
+
+Với source Wiktionary, giữ license note và link trang cụ thể. Không dùng similarity
+score, WordNet hoặc OMW như căn cứ duy nhất để publish bản dịch.
+
+## Runtime safety boundary
+
+Database package không bao giờ chứa:
+
+```text
+known_words.db
+reading progress
+book settings
+book sidecars
+highlights/notes
+plugin code
+```
+
+Updater RC1.4.6 nhận cả manifest legacy ba-file để rollback và manifest unified
+một-file để migration. Khi unified install thành công, file legacy chỉ được xóa
+sau khi `wordwise.db` đã atomic-replace thành công. Khi lỗi hoặc interrupted
+install, backup layout cũ được restore. User data không thuộc backup/restore
+database scope.
+
+## Release sequencing
+
+RC1.4.6 phải được phát hành trước như code-only bridge vì updater RC1.4.5 không
+hiểu unified archive. Sau khi người dùng cài bridge và restart KOReader, mới phát
+hành/cài database-only RC1.4.7. Không gửi unified archive trong Full OTA tới
+client chưa có bridge.
+
+Final release checklist:
 
 ```bash
-./tools/build_full_release.sh /path/to/new-output
+cd /home/ubuntu/wordwise.koplugin-custom
+for file in ./*.lua tests/*.lua; do npx --yes luaparse "$file" >/dev/null; done
+bash tools/run_lua_tests.sh
+git diff --check
+bash tools/build_release.sh
+bash tools/verify_release.sh
 ```
 
-This builds and verifies the code ZIP/checksum and database ZIP/checksum as one
-release set. The on-device updater independently repeats the outer checksum,
-manifest, per-database SHA-256, SQLite integrity, schema/domain/build and count
-checks before creating a pending restart-time install.
-
-## Adding a reviewed correction
-
-For each correction, record the database domain (`*` only for a General row),
-the exact term, exact requested sense, POS and a short review note. Do not add a
-translation based only on the headword or on a similarity score.
-
-Run:
-
-```bash
-python3 -m py_compile tools/*.py tests/test_data_tools.py
-python3 -m unittest -v tests/test_data_tools.py
-```
-
-Then rebuild into a fresh directory, rerun the full audit and inspect every
-manifest change before packaging.
-
-## Distribution boundary
-
-This Git source tree remains code-only. A GitHub Release may attach the
-database-only Full OTA asset only after its distributor has independently
-verified the rights for every included data source. The asset must remain in a
-draft Release until both its ZIP and checksum pass `verify_data_release.py`.
+Sau đó chạy data pipeline và verifier ở trên, kiểm tra ZIP listing và SHA-256,
+rồi mới tạo GitHub Release/tag. Không ghi đè hoặc sửa các tag/release công khai
+trước đây.

@@ -7,6 +7,6 @@ local UpdateConfig = dofile(plugin_dir .. "update_config.lua")
 return {
     name = "wordwise",
     fullname = _("Word Wise"),
-    description = _([[Shows compact English–Vietnamese inline hints for difficult words and specialist terms. Includes separate General, Economics, and Physics databases stored in the KOReader data directory.]]),
+    description = _([[Shows compact English–Vietnamese inline hints for difficult words and specialist terms. Uses one unified CEFR-classified database stored in the KOReader data directory.]]),
     version = UpdateConfig.version,
 }

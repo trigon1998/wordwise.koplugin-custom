@@ -15,7 +15,6 @@ local Font = require("ui/font")
 local InfoMessage = require("ui/widget/infomessage")
 local RenderText = require("ui/rendertext")
 local SpinWidget = require("ui/widget/spinwidget")
-local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local lfs = require("libs/libkoreader-lfs")
@@ -23,7 +22,6 @@ local logger = require("logger")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
-local BookClassifier = require("book_classifier")
 local ContextScorer = require("context_scorer")
 local KnownWords = require("known_words")
 local UpdateConfig = require("update_config")
@@ -32,12 +30,13 @@ local WordWiseUpdater = require("wordwise_updater")
 
 local WW_DIR = DataStorage:getDataDir() .. "/wordwise"
 local DB_DIR = WW_DIR .. "/databases"
+local UNIFIED_DB = DB_DIR .. "/wordwise.db"
 local KNOWN_DB = WW_DIR .. "/known_words.db"
 
 local PLUGIN_VERSION = UpdateConfig.version
 local MAX_LEVEL = 5
 local MAX_PHRASE_WORDS = 5
-local DEFAULT_LEVELS = { general = 2, economics = 3, physics = 3 }
+local DEFAULT_HINT_LEVEL = 2
 local DEFAULT_GLOSS_FONT_SIZE = 13
 local MIN_GLOSS_FONT_SIZE = 10
 local MAX_GLOSS_FONT_SIZE = 18
@@ -47,7 +46,7 @@ local PAGE_CACHE_LIMIT = 3
 local VISIBLE_WORD_CACHE_LIMIT = 3
 local TEXT_WIDTH_CACHE_LIMIT = 256
 local DEFAULT_AUTO_SPACING = 180
-local DOMAIN_LABELS = { general = "General", economics = "Economics", physics = "Physics" }
+local DOMAIN_LABELS = { unified = "Unified" }
 local DEFAULT_PHRASE_LENGTHS = { 5, 4, 3, 2 }
 local LAYOUT_HASH_MOD_A = 2147483647
 local LAYOUT_HASH_MOD_B = 2147483629
@@ -73,7 +72,7 @@ local function normalize_token(text)
 end
 
 local function domain_label(domain)
-    return DOMAIN_LABELS[domain] or DOMAIN_LABELS.general
+    return DOMAIN_LABELS[domain] or DOMAIN_LABELS.unified
 end
 
 local function bilingual_gloss(short_en, short_vi)
@@ -100,15 +99,13 @@ function WordWise:isSupportedDocument()
 end
 
 function WordWise:getDomain()
-    local ds = self.ui and self.ui.doc_settings
-    local domain = ds and ds:readSetting("wordwise_domain") or nil
-    return DOMAIN_LABELS[domain] and domain or "general"
+    return "unified"
 end
 
 function WordWise:getHintLevel()
     local ds = self.ui and self.ui.doc_settings
     local stored = ds and ds:readSetting("wordwise_hint_level") or nil
-    return tonumber(stored) or DEFAULT_LEVELS[self:getDomain()] or 2
+    return tonumber(stored) or DEFAULT_HINT_LEVEL
 end
 
 function WordWise:isTranslatedSelection(selected)
@@ -193,7 +190,9 @@ function WordWise:buildGlossFace()
 end
 
 function WordWise:getDBPath(domain)
+    if lfs.attributes(UNIFIED_DB, "mode") == "file" then return UNIFIED_DB end
     domain = domain or self:getDomain()
+    if domain == "unified" then domain = "general" end
     return DB_DIR .. "/wordwise_" .. domain .. ".db"
 end
 
@@ -204,10 +203,10 @@ function WordWise:closeDB()
 end
 
 function WordWise:getDB()
-    local domain = self:getDomain()
+    local path = self:getDBPath()
+    local domain = path == UNIFIED_DB and "unified" or self:getDomain()
     if self.db and self.db_domain == domain then return self.db end
     self:closeDB()
-    local path = self:getDBPath(domain)
     if lfs.attributes(path, "mode") ~= "file" then return nil, "database file not found: " .. path end
     local db, err = WordWiseDB.open(path)
     if not db then return nil, err or "database could not be opened" end
@@ -224,7 +223,13 @@ end
 
 function WordWise:isKnown(lemma)
     local kw = self:getKnownWords()
-    return kw and kw:isKnown(lemma, self:getDomain()) or false
+    if not kw then return false end
+    if kw:isKnown(lemma, "*") or kw:isKnown(lemma, "unified") then return true end
+    -- Preserve domain-scoped known-word records created by older releases.
+    for _, legacy_domain in ipairs({ "general", "economics", "physics" }) do
+        if kw:isKnown(lemma, legacy_domain) then return true end
+    end
+    return false
 end
 
 function WordWise:setKnown(lemma, scope, known)
@@ -412,52 +417,20 @@ function WordWise:getBookIdentityText()
     return text
 end
 
-function WordWise:applyDomainChoice(domain, enable_after)
+function WordWise:applyDomainChoice(_domain, enable_after)
     local ds = self.ui.doc_settings
-    ds:saveSetting("wordwise_domain", domain)
+    ds:saveSetting("wordwise_domain", "unified")
     ds:saveSetting("wordwise_domain_confirmed", true)
-    ds:saveSetting("wordwise_hint_level", DEFAULT_LEVELS[domain])
     self:closeDB()
     self:clearPageCache()
     if enable_after then self:setEnabled(true) else self:refresh() end
 end
 
-function WordWise:showDomainDialog(force)
+function WordWise:showDomainDialog(_force)
     if not self:isSupportedDocument() then return end
-    local sample = self:sampleCurrentPage(250)
-    if not force and BookClassifier.isVietnameseDominant(sample) then
-        local ds = self.ui.doc_settings
-        ds:saveSetting("wordwise_domain", "general")
-        ds:saveSetting("wordwise_domain_confirmed", true)
-        ds:saveSetting("wordwise_enabled", false)
-        UIManager:show(InfoMessage:new{
-            text = _("This book appears to be mainly Vietnamese, so Word Wise is off by default. You can enable it manually for English passages."),
-        })
-        return
-    end
-
-    local suggested = BookClassifier.suggest(self:getBookIdentityText(), sample)
-    local dialog
-    local function button(domain)
-        local text = domain_label(domain)
-        if domain == suggested then text = text .. " (suggested)" end
-        return {
-            text = text,
-            callback = function()
-                UIManager:close(dialog)
-                self:applyDomainChoice(domain, true)
-            end,
-        }
-    end
-    dialog = ButtonDialog:new{
-        title = _("Select Word Wise database"),
-        buttons = {
-            { button("general") },
-            { button("economics") },
-            { button("physics") },
-        },
-    }
-    UIManager:show(dialog)
+    -- The released data is a single unified dictionary. Keep the old setting
+    -- keys marked as confirmed so older sidecars do not reopen a domain dialog.
+    self:applyDomainChoice("unified", false)
 end
 
 function WordWise:onReaderReady()
@@ -756,6 +729,69 @@ function WordWise:computePageHints()
         context_cache[key] = prepared
         return prepared.words, prepared.set
     end
+    local function get_candidates(kind, surface)
+        local method = db[kind]
+        if method then
+            local result = method(db, surface)
+            if type(result) == "table" then return result end
+            if result then return { result } end
+        end
+        local fallback = kind == "lookupCandidates" and db.lookupExact or db.lookupWord
+        if fallback then
+            local result = fallback(db, surface)
+            if result then return { result } end
+        end
+        return {}
+    end
+    local function choose_entry(entries, first, last, reject_name)
+        local context_words, context_set = prepared_context(first, last)
+        local record = records[first]
+        local lower = record.lower or record.key:lower()
+        local repeated_capitalized = (cap_counts[lower] or 0) >= 2
+            and (lower_counts[lower] or 0) == 0
+        local best
+        local ambiguous_best = false
+        local function same_selected_gloss(left, right)
+            return tostring(left and left.short_en or "") == tostring(right and right.short_en or "")
+                and tostring(left and left.short_vi or "") == tostring(right and right.short_vi or "")
+        end
+        for _, entry in ipairs(entries or {}) do
+            if entry and entry.difficulty <= level
+                    and not self:isKnown(entry.lemma or entry.term) then
+                local looks_like_name = reject_name and entry.domain == "general"
+                    and ((self.proper_names and self.proper_names[lower]) or repeated_capitalized)
+                if not looks_like_name then
+                    local accepted, confidence, selected, sense_kind
+                    if ContextScorer.acceptPrepared then
+                        accepted, confidence, selected, sense_kind =
+                            ContextScorer.acceptPrepared(entry, context_set)
+                    else
+                        accepted, confidence, selected, sense_kind =
+                            ContextScorer.accept(entry, context_words)
+                    end
+                    if accepted and self:isTranslatedSelection(selected or entry) then
+                        local score = tonumber(confidence) or 0
+                        local priority = tonumber(entry.priority) or 50
+                        local is_better = not best or score > best.score
+                            or (score == best.score and priority > best.priority)
+                        if is_better then
+                            best = {
+                                entry = entry, score = score, priority = priority,
+                                selected = selected, sense_kind = sense_kind,
+                            }
+                            ambiguous_best = false
+                        elseif best and score == best.score and priority == best.priority
+                                and not same_selected_gloss(selected or entry, best.selected or best.entry) then
+                            -- Do not guess between domain-specific translations without context.
+                            ambiguous_best = true
+                        end
+                    end
+                end
+            end
+        end
+        if ambiguous_best then return nil end
+        return best
+    end
     while i <= #records do
         local matched, consumed
         local remaining = math.min(MAX_PHRASE_WORDS, #records - i + 1)
@@ -767,24 +803,13 @@ function WordWise:computePageHints()
                 local surfaces = {}
                 for j = i, i + length - 1 do surfaces[#surfaces + 1] = records[j].key end
                 local phrase = table.concat(surfaces, " ")
-                local entry = db:lookupExact(phrase)
-                if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
-                    local context_words, context_set =
-                        prepared_context(i, i + length - 1)
-                    local accepted, confidence, selected, sense_kind
-                    if ContextScorer.acceptPrepared then
-                        accepted, confidence, selected, sense_kind =
-                            ContextScorer.acceptPrepared(entry, context_set)
-                    else
-                        accepted, confidence, selected, sense_kind =
-                            ContextScorer.accept(entry, context_words)
-                    end
-                    if accepted and self:isTranslatedSelection(selected or entry) then
-                        matched = self:makeHint(entry, phrase, records, i, i + length - 1,
-                            confidence, selected, sense_kind)
-                        consumed = length
-                        break
-                    end
+                local best = choose_entry(get_candidates("lookupCandidates", phrase), i,
+                    i + length - 1, false)
+                if best then
+                    matched = self:makeHint(best.entry, phrase, records, i, i + length - 1,
+                        best.score, best.selected, best.sense_kind)
+                    consumed = length
+                    break
                 end
             end
         end
@@ -793,28 +818,11 @@ function WordWise:computePageHints()
             local record = records[i]
             local useful = #record.key >= 3 or record.key:match("^[A-Z][A-Z0-9]+$")
             if useful and not record.key:find("https?", 1, true) then
-                local entry = db:lookupWord(record.key)
-                if entry and entry.difficulty <= level and not self:isKnown(entry.lemma or entry.term) then
-                    local lower = record.lower or record.key:lower()
-                    local repeated_capitalized = (cap_counts[lower] or 0) >= 2
-                        and (lower_counts[lower] or 0) == 0
-                    local looks_like_name = entry.domain == "general"
-                        and ((self.proper_names and self.proper_names[lower]) or repeated_capitalized)
-                    if not looks_like_name then
-                        local context_words, context_set = prepared_context(i, i)
-                        local accepted, confidence, selected, sense_kind
-                        if ContextScorer.acceptPrepared then
-                            accepted, confidence, selected, sense_kind =
-                                ContextScorer.acceptPrepared(entry, context_set)
-                        else
-                            accepted, confidence, selected, sense_kind =
-                                ContextScorer.accept(entry, context_words)
-                        end
-                        if accepted and self:isTranslatedSelection(selected or entry) then
-                            matched = self:makeHint(entry, record.surface, records, i, i,
-                                confidence, selected, sense_kind)
-                        end
-                    end
+                local best = choose_entry(get_candidates("lookupWordCandidates", record.key),
+                    i, i, true)
+                if best then
+                    matched = self:makeHint(best.entry, record.surface, records, i, i,
+                        best.score, best.selected, best.sense_kind)
                 end
             end
             consumed = 1
@@ -1196,63 +1204,29 @@ function WordWise:showHintPopup(hint)
     if hint.lemma and hint.lemma:lower() ~= tostring(hint.surface):lower() then
         title = title .. "  →  " .. hint.lemma
     end
-    local lines = {
-        bilingual_gloss(hint.short_en, hint.short_vi),
-        "",
-        "Domain: " .. domain_label(self:getDomain()),
-    }
-    if hint.pos and hint.pos ~= "other" then lines[#lines + 1] = "Part of speech: " .. hint.pos end
-    if hint.register_label then lines[#lines + 1] = "Register: " .. hint.register_label end
-    local other_en, other_vi
-    if hint.selected_sense == "alternate" then
-        other_en, other_vi = hint.primary_short_en, hint.primary_short_vi
-    else
-        other_en, other_vi = hint.sense2_en, hint.sense2_vi
-    end
-    if other_en and other_en ~= "" then
-        lines[#lines + 1] = ""
-        lines[#lines + 1] = "Other possible sense: "
-            .. bilingual_gloss(other_en, other_vi)
-    end
-    if hint.context and hint.context ~= "" then
-        lines[#lines + 1] = ""
-        lines[#lines + 1] = "Book context:"
-        lines[#lines + 1] = hint.context
-    end
-
-    local viewer
-    viewer = TextViewer:new{
-        title = title,
-        text = table.concat(lines, "\n"),
-        buttons_table = {
+    local dialog
+    dialog = ButtonDialog:new{
+        title = title .. "\n" .. bilingual_gloss(hint.short_en, hint.short_vi),
+        buttons = {
             {
                 {
-                    text = "Known in " .. domain_label(self:getDomain()),
+                    text = _("Known"),
                     callback = function()
-                        UIManager:close(viewer)
-                        self:setKnown(hint.lemma, self:getDomain(), true)
+                        UIManager:close(dialog)
+                        self:setKnown(hint.lemma or hint.surface, "*", true)
                     end,
                 },
                 {
-                    text = "Known in all domains",
+                    text = _("Open dictionary"),
                     callback = function()
-                        UIManager:close(viewer)
-                        self:setKnown(hint.lemma, "*", true)
-                    end,
-                },
-            },
-            {
-                {
-                    text = "Open dictionary",
-                    callback = function()
-                        UIManager:close(viewer)
+                        UIManager:close(dialog)
                         UIManager:nextTick(function() self:openDictionary(hint.surface) end)
                     end,
                 },
             },
         },
     }
-    UIManager:show(viewer)
+    UIManager:show(dialog)
 end
 
 function WordWise:openDictionary(word)
@@ -1430,20 +1404,6 @@ function WordWise:getSubMenu()
             callback = function() self:setEnabled(not self:isEnabled()) end,
         },
         {
-            text_func = function() return "Database: " .. domain_label(self:getDomain()) end,
-            sub_item_table_func = function()
-                local items = {}
-                for _, domain in ipairs({ "general", "economics", "physics" }) do
-                    items[#items + 1] = {
-                        text = domain_label(domain), radio = true,
-                        checked_func = function() return self:getDomain() == domain end,
-                        callback = function() self:applyDomainChoice(domain, self:isEnabled()) end,
-                    }
-                end
-                return items
-            end,
-        },
-        {
             text_func = function() return T(_("Hint level: %1"), self:getHintLevel()) end,
             sub_item_table_func = function()
                 local items = {}
@@ -1528,10 +1488,6 @@ function WordWise:getSubMenu()
                     },
                 }
             end,
-        },
-        {
-            text = _("Detect book category again"),
-            callback = function() self:showDomainDialog(true) end,
         },
         {
             text = _("Updates"),
