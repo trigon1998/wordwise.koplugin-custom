@@ -46,7 +46,10 @@ local PAGE_CACHE_LIMIT = 3
 local VISIBLE_WORD_CACHE_LIMIT = 3
 local TEXT_WIDTH_CACHE_LIMIT = 256
 local DEFAULT_AUTO_SPACING = 180
-local DOMAIN_LABELS = { unified = "Unified" }
+local DOMAIN_LABELS = {
+    unified = "Unified",
+    general = "General (legacy fallback)",
+}
 local DEFAULT_PHRASE_LENGTHS = { 5, 4, 3, 2 }
 local LAYOUT_HASH_MOD_A = 2147483647
 local LAYOUT_HASH_MOD_B = 2147483629
@@ -99,7 +102,10 @@ function WordWise:isSupportedDocument()
 end
 
 function WordWise:getDomain()
-    return "unified"
+    if lfs.attributes(UNIFIED_DB, "mode") == "file" then return "unified" end
+    -- Until the unified bundle is installed, runtime compatibility uses the
+    -- legacy General file. Report that actual state instead of claiming Unified.
+    return "general"
 end
 
 function WordWise:getHintLevel()

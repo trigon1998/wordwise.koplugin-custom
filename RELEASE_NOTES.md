@@ -1,5 +1,21 @@
 # Word Wise 2026.07.1 — Unified CEFR rollout
 
+## RC1.4.9 — data-only retry and diagnostics hotfix
+
+RC1.4.9 sửa lỗi xảy ra sau khi cài RC1.4.8: khi plugin code đã ở version mới
+nhưng database vẫn là RC1.4.3, updater trước đó chọn release code-only hiện tại
+làm fallback cho database và báo thiếu verified data assets. Updater nay lọc
+riêng các release có đủ data ZIP/SHA-256, chọn data-only RC1.4.7 nếu version đó
+mới hơn database đang cài và không vượt version plugin hiện tại.
+
+Diagnostics cũng chỉ báo `Domain: Unified` khi file `wordwise.db` thực sự tồn tại.
+Trong giai đoạn chuyển tiếp, database legacy General được hiển thị đúng là
+`General (legacy fallback)` thay vì bị gắn nhãn Unified. Không có thay đổi nào
+đối với known words, tiến độ đọc hoặc sidecar.
+
+Thiết bị có RC1.4.8 nên cài RC1.4.9 code-only và restart trước khi retry database
+RC1.4.7. Thiết bị RC1.4.3 vẫn cần cài bridge thủ công trước.
+
 ## RC1.4.8 — pending-state migration hotfix
 
 RC1.4.8 là code-only hotfix cho thiết bị đã cài bridge nhưng còn state pending

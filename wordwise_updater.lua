@@ -342,6 +342,30 @@ function Updater.selectCurrentRelease(releases, current_version, _include_prerel
     return nil
 end
 
+function Updater.selectDataRelease(releases, installed_database_version,
+        maximum_plugin_version, include_prereleases)
+    local selected
+    local installed = installed_database_version or "0.0.0"
+    for _, release in ipairs(releases or {}) do
+        local version = release_version(release)
+        local newer_than_data = version
+            and Updater.compareVersions(version, installed) == 1
+        local not_newer_than_plugin = not maximum_plugin_version
+            or Updater.compareVersions(version, maximum_plugin_version) ~= 1
+        local eligible = version and not release.draft
+            and (include_prereleases or not release.prerelease)
+            and newer_than_data and not_newer_than_plugin
+        if eligible then
+            local assets = Updater.releaseAssets(release)
+            if assets.has_data and (not selected
+                    or Updater.compareVersions(version, release_version(selected)) == 1) then
+                selected = release
+            end
+        end
+    end
+    return selected
+end
+
 local function installed_version()
     return Config.version
 end
@@ -1667,10 +1691,12 @@ function Updater.check()
                 -- migration; it must be installable without replacing code.
                 data_only = true
             elseif not release then
-                local data_needed = Updater.databaseUpdateNeeded(installed_version(), true)
+                local data_needed, installed_database_version =
+                    Updater.databaseUpdateNeeded(installed_version(), true)
                 if data_needed then
-                    release = Updater.selectCurrentRelease(
-                        releases, installed_version(), Updater.includesPrereleases())
+                    release = Updater.selectDataRelease(
+                        releases, installed_database_version, installed_version(),
+                        Updater.includesPrereleases())
                     data_only = release ~= nil
                     assets = release and Updater.releaseAssets(release) or nil
                 end

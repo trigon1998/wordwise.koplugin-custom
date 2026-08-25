@@ -17,11 +17,11 @@ quét trang đang hiển thị, tìm những từ hoặc cụm từ khó phù h�
 nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn giúp xác định
 chính xác từ đang được giải thích mà không cần rời khỏi trang để mở từ điển.
 
-**Phiên bản code candidate:** `2026.07.1-rc1.4.8`
+**Phiên bản code candidate:** `2026.07.1-rc1.4.9`
 
 **Kênh cập nhật:** bản thử nghiệm RC
 **Database candidate tiếp theo:** `2026.07.1-rc1.4.7`, phát hành riêng sau khi
-đã cài bridge RC1.4.6; RC1.4.8 là hotfix cho pending-state migration.
+đã cài bridge RC1.4.6; RC1.4.9 là hotfix cho data-only selection và pending-state migration.
 
 ## Tính năng nổi bật
 

@@ -15,6 +15,7 @@ end
 local scheduled_callbacks = {}
 local render_measure_calls = 0
 local shown_dialog
+local unified_present = false
 
 package.preload["ffi/blitbuffer"] = function()
     return { COLOR_DARK_GRAY = 1, COLOR_BLACK = 0 }
@@ -52,7 +53,13 @@ package.preload["ui/uimanager"] = function()
 end
 package.preload["ui/widget/container/widgetcontainer"] = function() return WidgetContainer end
 package.preload["libs/libkoreader-lfs"] = function()
-    return { attributes = function() return nil end, mkdir = function() return true end }
+    return {
+        attributes = function(path)
+            if unified_present and tostring(path):match("/wordwise%.db$") then return "file" end
+            return nil
+        end,
+        mkdir = function() return true end,
+    }
 end
 package.preload["logger"] = function() return { warn = function() end } end
 package.preload["gettext"] = function() return function(text) return text end end
@@ -200,7 +207,9 @@ assert_equal(opened, nil, "hidden hint must not open a popup")
 assert_equal(tap:onHintTap({ pos = { x = 15, y = 15 } }), true,
     "a rendered hint must receive taps")
 assert_equal(opened.surface, "visible", "visible hint must open its popup")
-assert_equal(layout:getDomain(), "unified", "runtime must use unified dictionary mode")
+assert_equal(layout:getDomain(), "general", "legacy fallback must report the actual General database mode")
+unified_present = true
+assert_equal(layout:getDomain(), "unified", "runtime must use unified dictionary mode when wordwise.db exists")
 shown_dialog = nil
 WordWise.showHintPopup(tap, {
     surface = "dawdling", lemma = "dawdle",
@@ -412,8 +421,8 @@ matcher.render_stats = {
     top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.8", 1, true),
-    "diagnostics must expose the RC1.4.8 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.9", 1, true),
+    "diagnostics must expose the RC1.4.9 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
@@ -428,4 +437,4 @@ assert(diagnostics:find(
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.4.8 main behavior tests: PASS")
+print("RC1.4.9 main behavior tests: PASS")

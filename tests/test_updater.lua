@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.8",
+assert_equal(metadata.version, "2026.07.1-rc1.4.9",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -94,8 +94,8 @@ assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.5.zip",
 assert_equal(data_checksum_name, data_zip_name .. ".sha256",
     "database checksum must follow the ZIP name")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.8")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.8.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.9")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.9.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
@@ -189,6 +189,25 @@ assert_equal(unified_data_assets.has_data, true,
 assert_equal(unified_data_assets.has_code, false,
     "data-only release must not pretend code is available")
 
+local data_release_choice = Updater.selectDataRelease({
+    {
+        tag_name = "v2026.07.1-rc1.4.8", prerelease = true, draft = false,
+        assets = {
+            { name = "wordwise.koplugin-v2026.07.1-rc1.4.8.zip", browser_download_url = "https://example.test/code.zip" },
+            { name = "wordwise.koplugin-v2026.07.1-rc1.4.8.zip.sha256", browser_download_url = "https://example.test/code.sha256" },
+        },
+    },
+    {
+        tag_name = "v2026.07.1-rc1.4.7", prerelease = true, draft = false,
+        assets = {
+            { name = "WordWise_Databases_2026.07.1-rc1.4.7.zip", browser_download_url = "https://example.test/data.zip" },
+            { name = "WordWise_Databases_2026.07.1-rc1.4.7.zip.sha256", browser_download_url = "https://example.test/data.sha256" },
+        },
+    },
+}, "2026.07.1-rc1.4.3", "2026.07.1-rc1.4.8", true)
+assert_equal(data_release_choice.tag_name, "v2026.07.1-rc1.4.7",
+    "database retry must select data-only RC1.4.7 below current plugin version")
+
 local code_only_assets = Updater.releaseAssets({
     tag_name = "v2026.07.1-rc1.4.6",
     assets = {
@@ -246,4 +265,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.8 updater logic tests: PASS")
+print("RC1.4.9 updater logic tests: PASS")
