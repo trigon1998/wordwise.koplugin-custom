@@ -192,6 +192,7 @@ coverage `dawdle` và `PRAGMA integrity_check`.
 
 | Release | Nội dung |
 |---|---|
+| RC1.4.8 | Pending schema/layout state repair; mixed-directory legacy backup detection; code-only hotfix |
 | RC1.4.6 | Code-only bridge; updater unified/legacy layout-aware; pending/backup layout metadata; compact Quick Tap; multi-candidate runtime |
 | RC1.4.5 | Reviewed `dawdle` coverage, inflection mappings, English-only inline hint gate |
 | RC1.4.4 | Capability bridge và code-only updater path |

@@ -111,6 +111,15 @@ local function data_specs_for_manifest(manifest)
 end
 
 local function data_specs_for_installed(paths)
+    -- During an interrupted migration a new unified file and old files may
+    -- briefly coexist. Treat that state as legacy for backup purposes so all
+    -- pre-existing legacy files remain recoverable; only a clean directory
+    -- with no legacy files is considered unified.
+    for _, spec in ipairs(LEGACY_DATA_FILES) do
+        if lfs.attributes(paths.databases .. "/" .. spec.name, "mode") == "file" then
+            return LEGACY_DATA_FILES
+        end
+    end
     if lfs.attributes(paths.databases .. "/wordwise.db", "mode") == "file" then
         return UNIFIED_DATA_FILES
     end
@@ -124,6 +133,29 @@ end
 
 local function data_specs_for_layout(layout)
     return layout == "unified-single-database" and UNIFIED_DATA_FILES or LEGACY_DATA_FILES
+end
+
+local function supported_data_layout(layout)
+    return layout == "legacy-three-database" or layout == "unified-single-database"
+end
+
+-- Return the canonical state represented by the already validated staged
+-- manifest. Older updater attempts can leave missing or stale state files; the
+-- payload and manifest remain authoritative, while these tiny state files are
+-- safe to repair before installation.
+function Updater.reconcilePendingDataState(pending_schema, pending_layout,
+        staged_schema, staged_layout)
+    local canonical_schema = tonumber(staged_schema)
+    local canonical_layout = tostring(staged_layout or "")
+    if not Updater.supportsDatabaseSchema(canonical_schema) then
+        return nil, nil, false, "invalid staged database schema"
+    end
+    if not supported_data_layout(canonical_layout) then
+        return nil, nil, false, "invalid staged database layout"
+    end
+    local schema_matches = tonumber(pending_schema) == canonical_schema
+    local layout_matches = tostring(pending_layout or "") == canonical_layout
+    return canonical_schema, canonical_layout, not (schema_matches and layout_matches)
 end
 
 local DATA_AUXILIARY_FILES = {
@@ -166,6 +198,7 @@ function Updater.getCapabilities()
         database_schema_min = MIN_DATABASE_SCHEMA,
         database_schema_max = MAX_DATABASE_SCHEMA,
         code_only_bridge = true,
+        unified_database_layout = true,
         staged_data_migration = true,
         rollback_metadata = true,
     }
@@ -1321,14 +1354,27 @@ function Updater.applyPendingDataUpdate()
         return false, "pending database update was rejected: " .. tostring(err)
     end
     local pending_schema = tonumber(read_first_line(paths.pending_data_schema) or "")
-    if pending_schema and pending_schema ~= staged_schema then
-        discard_pending_data(paths)
-        return false, "pending database schema state does not match its manifest"
-    end
     local pending_layout = read_first_line(paths.pending_data_layout)
-    if pending_layout and pending_layout ~= staged_layout then
+    local canonical_schema, canonical_layout, needs_repair, state_err =
+        Updater.reconcilePendingDataState(
+            pending_schema, pending_layout, staged_schema, staged_layout)
+    if not canonical_schema then
         discard_pending_data(paths)
-        return false, "pending database layout state does not match its manifest"
+        return false, "pending database state cannot be reconciled: " .. tostring(state_err)
+    end
+    if needs_repair then
+        local repaired, repair_err = atomic_write_text(
+            paths.pending_data_schema, tostring(canonical_schema) .. "\n")
+        if not repaired then
+            discard_pending_data(paths)
+            return false, "cannot repair pending database schema state: " .. tostring(repair_err)
+        end
+        repaired, repair_err = atomic_write_text(
+            paths.pending_data_layout, canonical_layout .. "\n")
+        if not repaired then
+            discard_pending_data(paths)
+            return false, "cannot repair pending database layout state: " .. tostring(repair_err)
+        end
     end
     if not ensure_directory(paths.wordwise) or not ensure_directory(paths.databases) then
         return false, "cannot create Word Wise database directory"

@@ -1,5 +1,22 @@
 # Word Wise 2026.07.1 — Unified CEFR rollout
 
+## RC1.4.8 — pending-state migration hotfix
+
+RC1.4.8 là code-only hotfix cho thiết bị đã cài bridge nhưng còn state pending
+được tạo bởi lần thử migration trước. Một số state cũ có thể ghi layout legacy,
+thiếu layout hoặc không đồng bộ với manifest unified, khiến updater giữ nguyên
+database cũ và báo `pending database layout state does not match its manifest`.
+
+Updater nay coi staged manifest và database đã validate là nguồn sự thật, repair
+atomically các file state schema/layout nhỏ trước khi install, và chỉ fail-closed
+khi staged schema/layout thực sự không hợp lệ. Khi thư mục runtime đang ở trạng
+thái mixed do một lần install bị gián đoạn, backup ưu tiên thu đủ các database
+legacy hiện có để rollback không bỏ sót file. Không có thay đổi nào tới
+`known_words.db`, tiến độ đọc hoặc sidecar.
+
+Thiết bị đang chạy RC1.4.6 nên cài RC1.4.8 code-only và restart trước khi retry
+cài unified database RC1.4.7. Thiết bị RC1.4.3 vẫn cần cài bridge thủ công trước.
+
 ## RC1.4.6 — code-only bridge
 
 RC1.4.6 là bản phát hành **chỉ có plugin code**, không chứa database archive.

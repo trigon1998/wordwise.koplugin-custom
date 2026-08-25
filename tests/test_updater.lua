@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.6",
+assert_equal(metadata.version, "2026.07.1-rc1.4.8",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -52,6 +52,8 @@ assert_equal(capabilities.database_schema_max, 3,
     "updater must advertise schema-v3 compatibility")
 assert_equal(capabilities.code_only_bridge, true,
     "updater must advertise code-only bridge support")
+assert_equal(capabilities.unified_database_layout, true,
+    "updater must advertise unified database layout support")
 assert_equal(Updater.supportsDatabaseSchema(2), true,
     "schema-v2 must be supported")
 assert_equal(Updater.supportsDatabaseSchema(3), true,
@@ -92,8 +94,8 @@ assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.5.zip",
 assert_equal(data_checksum_name, data_zip_name .. ".sha256",
     "database checksum must follow the ZIP name")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.6")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.6.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.8")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.8.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
@@ -133,6 +135,32 @@ local unified_manifest_records, unified_manifest_err = Updater.validateDataManif
 }, "2026.07.1-rc1.4.7")
 assert(unified_manifest_records and unified_manifest_records["wordwise.db"],
     unified_manifest_err or "unified database manifest must be accepted")
+
+local schema, layout, repair = Updater.reconcilePendingDataState(
+    2, "unified-single-database", 2, "unified-single-database")
+assert_equal(schema, 2, "matching pending schema must remain canonical")
+assert_equal(layout, "unified-single-database", "matching pending layout must remain canonical")
+assert_equal(repair, false, "matching pending state must not require repair")
+
+schema, layout, repair = Updater.reconcilePendingDataState(
+    nil, "legacy-three-database", 2, "unified-single-database")
+assert_equal(schema, 2, "missing pending schema must be repaired from manifest")
+assert_equal(layout, "unified-single-database", "stale pending layout must be repaired from manifest")
+assert_equal(repair, true, "missing/stale pending state must require repair")
+
+local invalid_schema, invalid_layout, invalid_repair, state_err =
+    Updater.reconcilePendingDataState(2, "unified-single-database", 4, "unified-single-database")
+assert_equal(invalid_schema, nil, "unsupported staged schema must fail closed")
+assert_equal(invalid_layout, nil, "unsupported staged schema must not produce a layout")
+assert_equal(invalid_repair, false, "invalid staged schema must not be marked repairable")
+assert(state_err, "invalid staged schema must explain the failure")
+
+invalid_schema, invalid_layout, invalid_repair, state_err =
+    Updater.reconcilePendingDataState(2, "legacy-three-database", 2, "unknown-layout")
+assert_equal(invalid_schema, nil, "unknown staged layout must fail closed")
+assert_equal(invalid_layout, nil, "unknown staged layout must not be accepted")
+assert_equal(invalid_repair, false, "unknown staged layout must not be marked repairable")
+assert(state_err, "unknown staged layout must explain the failure")
 
 local releases = {
     { tag_name = "v2026.07.1-rc1.4.5", prerelease = true, draft = false },
@@ -218,4 +246,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.6 updater logic tests: PASS")
+print("RC1.4.8 updater logic tests: PASS")
