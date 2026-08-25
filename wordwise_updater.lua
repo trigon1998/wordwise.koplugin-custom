@@ -1101,7 +1101,7 @@ local function validate_data_directory(directory, manifest_path, version)
             path, spec, version, record, true)
         if not valid then return false, database_err end
     end
-    return true, records.__database_schema, data_layout_for_specs(specs)
+    return true, nil, records.__database_schema, data_layout_for_specs(specs)
 end
 
 local function validate_staged_data(paths, version)

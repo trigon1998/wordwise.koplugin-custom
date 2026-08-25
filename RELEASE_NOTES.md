@@ -1,5 +1,21 @@
 # Word Wise 2026.07.1 — Unified CEFR rollout
 
+## RC1.4.10 — staged schema validation hotfix
+
+RC1.4.10 sửa lỗi gốc trong đường data-only OTA. Hàm validate staged database
+trước đây trả thành công theo dạng `(ok, schema, layout)`, trong khi caller đọc
+theo dạng `(ok, error, schema, layout)`. Vì vậy trên thiết bị, schema `2` bị đọc
+như error và layout bị đọc như schema, dẫn tới thông báo `invalid staged database
+schema` dù manifest và SQLite database đều hợp lệ.
+
+Hàm nay trả tuple nhất quán `(ok, error, schema, layout)` cho mọi caller. Combined
+với việc RC1.4.9 chọn đúng data-only RC1.4.7 và hiển thị đúng legacy fallback,
+thiết bị có thể retry unified database mà không cần xóa database cũ hoặc state
+người dùng.
+
+Thiết bị đang chạy RC1.4.9 nên cài RC1.4.10 code-only và restart trước khi retry
+database RC1.4.7. Thiết bị RC1.4.3 vẫn cần bootstrap bằng plugin ZIP mới hơn.
+
 ## RC1.4.9 — data-only retry and diagnostics hotfix
 
 RC1.4.9 sửa lỗi xảy ra sau khi cài RC1.4.8: khi plugin code đã ở version mới

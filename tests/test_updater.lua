@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.9",
+assert_equal(metadata.version, "2026.07.1-rc1.4.10",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -94,8 +94,8 @@ assert_equal(data_zip_name, "WordWise_Databases_2026.07.1-rc1.4.5.zip",
 assert_equal(data_checksum_name, data_zip_name .. ".sha256",
     "database checksum must follow the ZIP name")
 
-local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.9")
-assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.9.zip",
+local zip_name, checksum_name = Updater.assetNamesForVersion("2026.07.1-rc1.4.10")
+assert_equal(zip_name, "wordwise.koplugin-v2026.07.1-rc1.4.10.zip",
     "release ZIP name must be deterministic")
 assert_equal(checksum_name, zip_name .. ".sha256",
     "checksum asset must follow the ZIP name")
@@ -265,4 +265,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.9 updater logic tests: PASS")
+print("RC1.4.10 updater logic tests: PASS")
