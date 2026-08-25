@@ -1,6 +1,14 @@
-# Word Wise 2026.07.1-rc1.4.4
+# Word Wise 2026.07.1-rc1.4.5
 
-## Bridge updater: capability negotiation and code-only bootstrap
+## Coverage and display-policy correction
+
+RC1.4.5 bổ sung coverage override đã review cho `dawdle`, với bản dịch tiếng Việt có nguồn Wiktionary là `lãng phí thời gian`. Các dạng `dawdling`, `dawdled` và `dawdles` được ánh xạ qua `irregular_forms` về lemma `dawdle`, nên runtime có thể hiển thị entry khó khi gặp dạng biến cách trong sách.
+
+Builder trước đây chỉ tái phân loại các entry đã có trong Word Wise database; nó không thêm các lemma khó nhưng bị thiếu dù chúng xuất hiện trong nguồn CEFR fallback. RC1.4.5 bổ sung đường additive coverage có kiểm soát: chỉ thêm row có English gloss, Vietnamese gloss, POS, difficulty evidence và source URL được review; không tự sinh bản dịch.
+
+Runtime cũng không còn tạo inline bilingual hint cho entry chỉ có English gloss. Điều này ngăn các hint như `a safe sheltered place` của `haven` xuất hiện tự động khi không có bản dịch tiếng Việt đã review. Các entry English-only vẫn có thể được tra thủ công nếu cần.
+
+## RC1.4.4 Bridge updater: capability negotiation and code-only bootstrap
 
 RC1.4.4 là bridge release chỉ cập nhật plugin code. Updater quảng bá khả năng hỗ trợ database schema-v2/schema-v3, tách validator theo layout thực tế, chấp nhận release code-only và lưu schema version trong pending/backup state. Vì vậy, thiết bị cũ có thể cài bridge trước mà không bị buộc phải xác thực database schema-v3 bằng validator cũ.
 
@@ -9,7 +17,7 @@ Manifest database hiện hỗ trợ `database_schema` và `minimum_updater_schem
 
 ## Database expansion and hybrid difficulty
 
-The reviewed data expansion belongs to the separately verified RC1.4.3 schema-v2 database asset; RC1.4.4 does not attach or replace a database asset. That data adds **538 exact Vietnamese gloss overrides** selected from English Wiktionary and **92 reviewed phrase/collocation rows**. General therefore increases from 48 to 678 entries with a non-empty Vietnamese gloss and from 0 to 92 phrase entries.
+The reviewed data expansion is shipped in the RC1.4.5 schema-v2 database asset. It adds **538 exact Vietnamese gloss overrides**, **92 reviewed phrase/collocation rows**, and one reviewed `dawdle` coverage entry with three inflection mappings. General therefore increases from 48 to 679 entries with a non-empty Vietnamese gloss and from 0 to 92 phrase entries.
 
 Economics and Physics retain their existing domain-reviewed glosses and sense/context mappings. General gloss overrides are domain-scoped and are not copied into Economics or Physics merely because a term is shared. Three existing alternate senses with direct Wiktionary translations are also filled: Economics `beta`, and Physics `inflation` and `infrared`. Other missing alternate glosses remain blank rather than receiving guessed text.
 
@@ -37,7 +45,7 @@ Sources:
 
 ## Context-aware behavior retained
 
-RC1.4.4 retains the RC1.3.9 runtime behavior that moved context awareness from candidate filtering/ranking to **actual sense and gloss selection**. For entries with reviewed alternate context metadata, `ContextScorer` scores primary and alternate keywords in the prepared ±10-token context window. The alternate wins only on strict positive evidence; ties, zero evidence, missing metadata and legacy schema-v2 entries remain on the primary gloss.
+RC1.4.5 retains the RC1.3.9 runtime behavior that moved context awareness from candidate filtering/ranking to **actual sense and gloss selection**. For entries with reviewed alternate context metadata, `ContextScorer` scores primary and alternate keywords in the prepared ±10-token context window. The alternate wins only on strict positive evidence; ties, zero evidence, missing metadata and legacy schema-v2 entries remain on the primary gloss.
 
 `main.lua` renders the selected English/Vietnamese pair while the popup preserves the other possible sense. The runtime supports schema v3 with append-only `sense2_context_keywords` and falls back to schema v2 databases. The updater accepts both layouts.
 
@@ -45,21 +53,21 @@ RC1.4.4 retains the RC1.3.9 runtime behavior that moved context awareness from c
 
 The Full OTA remains database-only for user data purposes. It does not include `known_words.db`, reading progress, book sidecars or other per-user files. Existing backup, checksum, manifest, SQLite integrity and restart-time replacement protections remain in place.
 
-The database asset name is `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly. The bridge code candidate uses build version `2026.07.1-rc1.4.4`. Its data asset is intentionally omitted; the next schema-v3 data release will require the bridge updater to be installed and restarted first.
+The database asset name is `WordWise_Databases_<version>.zip`, matching `Updater.dataAssetNamesForVersion()` exactly. The correction release uses build version `2026.07.1-rc1.4.5` for both code and schema-v2 data assets. It preserves the bridge capability contract and the schema-v3 migration path introduced by RC1.4.4.
 
 ## Verification
 
-The candidate passed Lua parse and regression tests for main behavior, context selection, schema-v2 side-table context, capability negotiation, schema-v3 manifest validation and code-only bridge asset selection. Code release verification passed the fixed plugin allow-list and checksum. The schema-v2 data asset used by RC1.4.3 remains separately verified and unchanged.
+The candidate passed Lua parse and regression tests for main behavior, context selection, schema-v2 side-table context, capability negotiation, schema-v3 manifest validation, code-only bridge asset selection and translated-selection gating. Code and data release verification passed allow-list, manifest, per-database SHA-256, archive SHA-256, SQLite integrity, coverage entry and inflection mapping checks.
 
 Representative candidate counts are:
 
 | Database | Entries | Vietnamese glosses | Phrases | Sense2 Vietnamese glosses |
 |---|---:|---:|---:|---:|
-| General | 25,495 | 678 | 92 | 0 |
+| General | 25,496 | 679 | 92 | 0 |
 | Economics | 25,649 | 348 | 238 | 25 |
 | Physics | 25,620 | 352 | 192 | 46 |
 
-RC1.4.4 remains a code-only prerelease. Install and restart the bridge on a test device before publishing or selecting a future schema-v3 database asset. Do not replace the public RC1.3.9 release until the bridge and migration path have been tested on representative General, Economics and Physics books.
+RC1.4.5 remains a prerelease. Test the `dawdling` case and confirm that English-only hints such as `haven` are suppressed at every hint level before replacing the public RC1.3.9 release.
 
 ## Previous releases
 

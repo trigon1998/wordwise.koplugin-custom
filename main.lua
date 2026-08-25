@@ -111,6 +111,11 @@ function WordWise:getHintLevel()
     return tonumber(stored) or DEFAULT_LEVELS[self:getDomain()] or 2
 end
 
+function WordWise:isTranslatedSelection(selected)
+    return selected and type(selected.short_vi) == "string"
+        and selected.short_vi:match("%S") ~= nil
+end
+
 function WordWise:getGlossFontSize()
     return tonumber(G_reader_settings:readSetting("wordwise_gloss_font_size")) or DEFAULT_GLOSS_FONT_SIZE
 end
@@ -774,7 +779,7 @@ function WordWise:computePageHints()
                         accepted, confidence, selected, sense_kind =
                             ContextScorer.accept(entry, context_words)
                     end
-                    if accepted then
+                    if accepted and self:isTranslatedSelection(selected or entry) then
                         matched = self:makeHint(entry, phrase, records, i, i + length - 1,
                             confidence, selected, sense_kind)
                         consumed = length
@@ -805,7 +810,7 @@ function WordWise:computePageHints()
                             accepted, confidence, selected, sense_kind =
                                 ContextScorer.accept(entry, context_words)
                         end
-                        if accepted then
+                        if accepted and self:isTranslatedSelection(selected or entry) then
                             matched = self:makeHint(entry, record.surface, records, i, i,
                                 confidence, selected, sense_kind)
                         end

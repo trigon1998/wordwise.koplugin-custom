@@ -265,6 +265,10 @@ function matcher:isKnown() return false end
 function matcher:considerAutoSpacing() end
 
 matcher:computePageHints()
+assert_equal(matcher:isTranslatedSelection({ short_vi = "bản dịch" }), true,
+    "reviewed Vietnamese gloss must remain eligible")
+assert_equal(matcher:isTranslatedSelection({ short_vi = "" }), false,
+    "English-only gloss must not become an inline bilingual hint")
 assert_equal(#matcher.hints, 1, "five-word phrase must create one hint")
 assert_equal(matcher.hints[1].phrase_len, 5, "five-word phrase length must be retained")
 local first_pass_lookups = exact_lookups
@@ -363,8 +367,8 @@ matcher.render_stats = {
     top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.4", 1, true),
-    "diagnostics must expose the RC1.4.4 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.5", 1, true),
+    "diagnostics must expose the RC1.4.5 plugin version")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
@@ -379,4 +383,4 @@ assert(diagnostics:find(
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.4.4 main behavior tests: PASS")
+print("RC1.4.5 main behavior tests: PASS")
