@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.11",
+assert_equal(metadata.version, "2026.07.1-rc1.4.13",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -55,9 +55,9 @@ assert_equal(capabilities.code_only_bridge, true,
 assert_equal(capabilities.unified_database_layout, true,
     "updater must advertise unified database layout support")
 local update_config = require("update_config")
-assert_equal(update_config.database_bundle_version, "2026.07.1-rc1.4.7",
+assert_equal(update_config.database_bundle_version, "2026.07.1-rc1.4.12",
     "code config must declare the current database bundle independently")
-assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.7", "2026.07.1-rc1.4.10"), true,
+assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.12", "2026.07.1-rc1.4.13"), true,
     "current data bundle must remain current when code version is newer")
 assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.3", "2026.07.1-rc1.4.10"), false,
     "older data bundle must still require migration")
@@ -215,6 +215,30 @@ local data_release_choice = Updater.selectDataRelease({
 assert_equal(data_release_choice.tag_name, "v2026.07.1-rc1.4.7",
     "database retry must select data-only RC1.4.7 below current plugin version")
 
+local mixed_code_data_releases = {
+    {
+        tag_name = "v2026.07.1-rc1.4.12", prerelease = true, draft = false,
+        assets = {
+            { name = "WordWise_Databases_2026.07.1-rc1.4.12.zip", browser_download_url = "https://example.test/data.zip" },
+            { name = "WordWise_Databases_2026.07.1-rc1.4.12.zip.sha256", browser_download_url = "https://example.test/data.sha256" },
+        },
+    },
+    {
+        tag_name = "v2026.07.1-rc1.4.13", prerelease = true, draft = false,
+        assets = {
+            { name = "wordwise.koplugin-v2026.07.1-rc1.4.13.zip", browser_download_url = "https://example.test/code.zip" },
+            { name = "wordwise.koplugin-v2026.07.1-rc1.4.13.zip.sha256", browser_download_url = "https://example.test/code.sha256" },
+        },
+    },
+}
+assert_equal(Updater.selectCodeRelease(
+    mixed_code_data_releases, "2026.07.1-rc1.4.10", true).tag_name,
+    "v2026.07.1-rc1.4.13",
+    "older plugin with current RC1.4.12 data must select the code patch")
+assert_equal(Updater.isDatabaseVersionCurrent(
+    "2026.07.1-rc1.4.12", "2026.07.1-rc1.4.12"), true,
+    "installed RC1.4.12 data must be treated as current")
+
 local code_only_assets = Updater.releaseAssets({
     tag_name = "v2026.07.1-rc1.4.6",
     assets = {
@@ -272,4 +296,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.11 updater logic tests: PASS")
+print("RC1.4.13 updater logic tests: PASS")

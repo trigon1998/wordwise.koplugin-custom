@@ -350,6 +350,25 @@ function Updater.selectCurrentRelease(releases, current_version, _include_prerel
     return nil
 end
 
+function Updater.selectCodeRelease(releases, installed_version, include_prereleases)
+    local selected
+    for _, release in ipairs(releases or {}) do
+        local version = release_version(release)
+        local comparison = version and Updater.compareVersions(version, installed_version) or nil
+        local eligible = version and not release.draft
+            and (include_prereleases or not release.prerelease)
+            and comparison == 1
+        if eligible then
+            local assets = Updater.releaseAssets(release)
+            if assets.has_code and (not selected
+                    or Updater.compareVersions(version, release_version(selected)) == 1) then
+                selected = release
+            end
+        end
+    end
+    return selected
+end
+
 function Updater.selectDataRelease(releases, installed_database_version,
         maximum_plugin_version, include_prereleases)
     local selected
@@ -1250,6 +1269,15 @@ function Updater.databaseUpdateNeeded(expected_version, verify_integrity)
     return true, detected or stored
 end
 
+function Updater.getEffectiveInstalledDatabaseBundleVersion()
+    local detected = detect_database_bundle_version(update_paths())
+    if detected then
+        set_database_bundle_version(detected)
+        return detected
+    end
+    return Updater.getInstalledDatabaseBundleVersion()
+end
+
 local function read_data_backup_version(paths)
     return read_first_line(paths.data_backup .. "/backup_version.txt")
 end
@@ -1691,15 +1719,30 @@ function Updater.check()
                 return
             end
             local data_only = false
+            local installed_database_version =
+                Updater.getEffectiveInstalledDatabaseBundleVersion()
             local release = Updater.selectRelease(
                 releases, installed_version(), Updater.includesPrereleases())
             local assets = release and Updater.releaseAssets(release) or nil
             if release and assets and not assets.has_code and assets.has_data then
-                -- A newer data-only release is the second half of the bridge
-                -- migration; it must be installable without replacing code.
-                data_only = true
-            elseif not release then
-                local data_needed, installed_database_version =
+                -- A data-only release is useful only when it is newer than the
+                -- database already installed on disk. If the database is
+                -- already current/newer, continue with the newest code release
+                -- so an older plugin does not display a false database prompt.
+                local release_data_current = installed_database_version
+                    and Updater.isDatabaseVersionCurrent(
+                        installed_database_version, release_version(release))
+                if release_data_current then
+                    release = Updater.selectCodeRelease(
+                        releases, installed_version(), Updater.includesPrereleases())
+                    assets = release and Updater.releaseAssets(release) or nil
+                else
+                    data_only = true
+                end
+            end
+            if not release then
+                local data_needed
+                data_needed, installed_database_version =
                     Updater.databaseUpdateNeeded(installed_version(), true)
                 if data_needed then
                     release = Updater.selectDataRelease(
@@ -1728,7 +1771,8 @@ function Updater.check()
             end
 
             local version = release_version(release)
-            local database_version = Updater.getInstalledDatabaseBundleVersion() or _("not synchronized")
+            local database_version = Updater.getEffectiveInstalledDatabaseBundleVersion()
+                or _("not synchronized")
             local viewer
             viewer = TextViewer:new{
                 title = data_only and _("Word Wise database update available")
@@ -1931,7 +1975,7 @@ function Updater.getMenuItems()
         {
             text_func = function()
                 local pending = pending_data_version(paths)
-                local version = Updater.getInstalledDatabaseBundleVersion()
+                local version = Updater.getEffectiveInstalledDatabaseBundleVersion()
                 if pending then return _("Database update pending restart: ") .. pending end
                 return _("Installed databases: ") .. (version or _("not synchronized"))
             end,
