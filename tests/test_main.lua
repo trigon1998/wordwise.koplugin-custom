@@ -217,6 +217,11 @@ WordWise.showHintPopup(tap, {
     short_vi = "lãng phí thời gian",
 })
 assert(shown_dialog and shown_dialog.buttons, "quick tap must create a compact dialog")
+assert(shown_dialog.title:find("to spend time idly and unfruitfully", 1, true),
+    "quick tap must show the English definition")
+assert(not shown_dialog.title:find("lãng phí thời gian", 1, true)
+        and not shown_dialog.title:find(" · ", 1, true),
+    "quick tap must not show Vietnamese or bilingual separators")
 assert_equal(#shown_dialog.buttons, 1, "quick tap must use one compact button row")
 assert_equal(#shown_dialog.buttons[1], 2, "quick tap must expose exactly two actions")
 assert_equal(shown_dialog.buttons[1][1].text, "Known", "first quick tap action must be Known")
@@ -261,7 +266,10 @@ function phrase_db:getPhraseLengths(first_word)
 end
 function phrase_db:lookupWord() return nil end
 function phrase_db:getMetadata(key)
-    local values = { build_version = "2026.07.1-rc1", entry_count = 28118, phrase_count = 240 }
+    local values = {
+        build_version = "2026.07.1-rc1", entry_count = 28118, phrase_count = 240,
+        english_only = 27200,
+    }
     return values[key]
 end
 
@@ -288,10 +296,12 @@ function matcher:isKnown() return false end
 function matcher:considerAutoSpacing() end
 
 matcher:computePageHints()
-assert_equal(matcher:isTranslatedSelection({ short_vi = "bản dịch" }), true,
-    "reviewed Vietnamese gloss must remain eligible")
-assert_equal(matcher:isTranslatedSelection({ short_vi = "" }), false,
-    "English-only gloss must not become an inline bilingual hint")
+assert_equal(matcher:isTranslatedSelection({ short_en = "an English definition", short_vi = "bản dịch" }), true,
+    "English definition with reviewed Vietnamese metadata must remain eligible")
+assert_equal(matcher:isTranslatedSelection({ short_en = "English-only definition", short_vi = "" }), true,
+    "English-only definition must become eligible for an EN–EN hint")
+assert_equal(matcher:isTranslatedSelection({ short_en = "", short_vi = "bản dịch" }), false,
+    "empty English definition must not create a hint")
 assert_equal(#matcher.hints, 1, "five-word phrase must create one hint")
 assert_equal(matcher.hints[1].phrase_len, 5, "five-word phrase length must be retained")
 local first_pass_lookups = exact_lookups
@@ -310,8 +320,8 @@ local selected_hint = matcher:makeHint({
 }, "capital", phrase_records, 1, 1, 0.8, {
     short_en = "city where government sits", short_vi = "thủ đô",
 }, "alternate")
-assert_equal(selected_hint.text, "city where government sits · thủ đô",
-    "context-selected alternate gloss must be rendered")
+assert_equal(selected_hint.text, "city where government sits",
+    "context-selected English definition must be rendered without Vietnamese text")
 assert_equal(selected_hint.selected_sense, "alternate",
     "selected sense metadata must be retained")
 assert_equal(selected_hint.primary_short_en, "wealth used in business",
@@ -421,8 +431,10 @@ matcher.render_stats = {
     top_fallbacks = 1, top_clamped = 1, edge_hidden = 0,
 }
 local diagnostics = matcher:diagnosticsText()
-assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.13", 1, true),
-    "diagnostics must expose the RC1.4.13 plugin version")
+assert(diagnostics:find("Plugin version: 2026.07.1-rc1.4.14", 1, true),
+    "diagnostics must expose the RC1.4.14 plugin version")
+assert(diagnostics:find("English-only entries: 27200", 1, true),
+    "diagnostics must expose English-only metadata")
 assert(diagnostics:find("Phrase matcher: up to 5 words", 1, true),
     "diagnostics must expose five-word phrase support")
 assert(diagnostics:find(
@@ -437,4 +449,4 @@ assert(diagnostics:find(
 assert(diagnostics:find("Performance counters: off", 1, true),
     "performance counters must remain opt-in")
 
-print("RC1.4.13 main behavior tests: PASS")
+print("RC1.4.14 main behavior tests: PASS")

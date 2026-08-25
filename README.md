@@ -1,6 +1,6 @@
 # Word Wise Anh–Việt cho KOReader
 
-**Hiển thị giải nghĩa Anh–Việt ngắn ngay phía trên những từ và cụm từ khó khi bạn đọc sách bằng KOReader.**
+**Hiển thị definition EN–EN ngắn ngay phía trên những từ và cụm từ khó khi bạn đọc sách bằng KOReader.**
 
 [![Bản phát hành mới nhất](https://img.shields.io/github/v/release/trigon1998/wordwise.koplugin-custom?include_prereleases&sort=semver&label=phi%C3%AAn%20b%E1%BA%A3n)](https://github.com/trigon1998/wordwise.koplugin-custom/releases)
 [![Kiểm thử CI](https://github.com/trigon1998/wordwise.koplugin-custom/actions/workflows/ci.yml/badge.svg)](https://github.com/trigon1998/wordwise.koplugin-custom/actions/workflows/ci.yml)
@@ -17,7 +17,7 @@ quét trang đang hiển thị, tìm những từ hoặc cụm từ khó phù h�
 nghĩa ngắn ngay phía trên văn bản. Đường ngang và dấu mũi nhọn giúp xác định
 chính xác từ đang được giải thích mà không cần rời khỏi trang để mở từ điển.
 
-**Phiên bản code candidate:** `2026.07.1-rc1.4.9`
+**Phiên bản code candidate:** `2026.07.1-rc1.4.14`
 
 **Kênh cập nhật:** bản thử nghiệm RC
 **Database candidate tiếp theo:** `2026.07.1-rc1.4.7`, phát hành riêng sau khi
@@ -27,11 +27,11 @@ chính xác từ đang được giải thích mà không cần rời khỏi tran
 
 | Tính năng | Công dụng |
 |---|---|
-| Giải nghĩa ngay trên trang | Hiển thị định nghĩa tiếng Anh ngắn và bản dịch tiếng Việt đã được rà soát |
+| Giải nghĩa ngay trên trang | Hiển thị definition EN–EN ngắn; không hiển thị bilingual tiếng Việt |
 | Nhận diện cụm từ | Nhận diện cụm từ dài tối đa 5 từ, không chỉ từng từ riêng lẻ |
 | Một database thống nhất | General, Economics và Physics được gộp trong một file `wordwise.db`; domain chỉ còn là metadata nội bộ để chọn sense theo ngữ cảnh |
 | Phân loại CEFR duy nhất | A1→5, A2→4, B1→3, B2→2, C1/C2→1; wordfreq không thay đổi difficulty đã phát hành |
-| Chọn nghĩa theo ngữ cảnh | Dùng các từ xung quanh để chọn primary/alternate gloss; khi các gloss khác nhau vẫn hòa điểm thì đóng fail-closed thay vì đoán bừa |
+| Chọn nghĩa theo ngữ cảnh | Dùng các từ xung quanh để chọn primary/alternate English definition; khi các sense khác nhau vẫn hòa điểm thì đóng fail-closed thay vì đoán bừa |
 | Từ đã biết | Lưu lựa chọn đã biết ở scope thống nhất `*`, đồng thời vẫn đọc các record domain cũ để không làm mất lựa chọn trước đây |
 | Quick Tap compact | Chỉ còn đúng hai hành động: **Đã biết** và **Mở từ điển**; không còn bảng chi tiết chiếm toàn màn hình |
 | Dấu chỉ từ trực quan | Đường ngang và dấu mũi nhọn chỉ đúng từ đang được giải thích |
@@ -77,9 +77,10 @@ không có. `wordfreq` không được import hoặc dùng để nâng, hạ hay
 published `difficulty`.
 
 Các từ số, số thứ tự và entry không có CEFR evidence đủ tin cậy bị loại khỏi
-inline Word Wise. Bản dịch tiếng Việt chỉ được đưa vào khi có row đã review và
-source link; pipeline không tự sinh bản dịch. Entry English-only vẫn có thể mở
-bằng dictionary thủ công, nhưng không tạo automatic bilingual hint.
+inline Word Wise. Runtime hiển thị definition EN–EN cho mọi entry có `short_en`, bao gồm
+English-only entries. `short_vi` vẫn được giữ trong database để bảo toàn dữ liệu
+và provenance, nhưng không được hiển thị trong inline hint hoặc Quick Tap. Pipeline
+không tự sinh bản dịch tiếng Việt.
 
 ## Cài đặt và cập nhật theo hai bước
 

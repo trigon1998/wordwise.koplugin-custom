@@ -78,10 +78,8 @@ local function domain_label(domain)
     return DOMAIN_LABELS[domain] or DOMAIN_LABELS.unified
 end
 
-local function bilingual_gloss(short_en, short_vi)
-    short_en = tostring(short_en or "")
-    if short_vi and short_vi ~= "" then return short_en .. " · " .. short_vi end
-    return short_en
+local function english_definition(short_en)
+    return tostring(short_en or "")
 end
 
 local function add_layout_value(hash_a, hash_b, value)
@@ -115,8 +113,10 @@ function WordWise:getHintLevel()
 end
 
 function WordWise:isTranslatedSelection(selected)
-    return selected and type(selected.short_vi) == "string"
-        and selected.short_vi:match("%S") ~= nil
+    -- Compatibility name retained for callers/tests; display eligibility is
+    -- now based on a non-empty English definition, never on Vietnamese text.
+    return selected and type(selected.short_en) == "string"
+        and selected.short_en:match("%S") ~= nil
 end
 
 function WordWise:getGlossFontSize()
@@ -635,7 +635,7 @@ end
 function WordWise:makeHint(entry, surface, records, first, last, confidence, selected, sense_kind)
     local selected_short_en = selected and selected.short_en or entry.short_en
     local selected_short_vi = selected and selected.short_vi or entry.short_vi
-    local gloss = bilingual_gloss(selected_short_en, selected_short_vi)
+    local gloss = english_definition(selected_short_en)
     return {
         text = gloss, surface = surface, lemma = entry.lemma or entry.term,
         short_en = selected_short_en, short_vi = selected_short_vi,
@@ -1212,7 +1212,7 @@ function WordWise:showHintPopup(hint)
     end
     local dialog
     dialog = ButtonDialog:new{
-        title = title .. "\n" .. bilingual_gloss(hint.short_en, hint.short_vi),
+        title = title .. "\n" .. english_definition(hint.short_en),
         buttons = {
             {
                 {
@@ -1340,7 +1340,8 @@ function WordWise:diagnosticsText()
         "Phrases: " .. tostring(db:getMetadata("phrase_count") or "unknown"),
         "Reviewed Vietnamese: " .. tostring(db:getMetadata("reviewed_vi_count")
             or db:getMetadata("verified_vi_count") or "unknown"),
-        "English-only entries: " .. tostring(db:getMetadata("english_only_count") or "unknown"),
+        "English-only entries: " .. tostring(db:getMetadata("english_only_count")
+            or db:getMetadata("english_only") or "unknown"),
         "Phrase matcher: up to " .. tostring(MAX_PHRASE_WORDS) .. " words",
         "Hint level: " .. tostring(self:getHintLevel()),
         "Current line spacing: " .. tostring(self:currentLineSpacing()) .. "%",

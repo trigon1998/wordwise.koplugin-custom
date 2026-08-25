@@ -40,7 +40,7 @@ local function assert_equal(actual, expected, message)
     end
 end
 
-assert_equal(metadata.version, "2026.07.1-rc1.4.13",
+assert_equal(metadata.version, "2026.07.1-rc1.4.14",
     "_meta.lua must use the updater configuration version")
 assert_equal(metadata.name, "wordwise",
     "_meta.lua must expose the plugin identity used by KOReader")
@@ -57,7 +57,7 @@ assert_equal(capabilities.unified_database_layout, true,
 local update_config = require("update_config")
 assert_equal(update_config.database_bundle_version, "2026.07.1-rc1.4.12",
     "code config must declare the current database bundle independently")
-assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.12", "2026.07.1-rc1.4.13"), true,
+assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.12", "2026.07.1-rc1.4.14"), true,
     "current data bundle must remain current when code version is newer")
 assert_equal(Updater.isDatabaseVersionCurrent("2026.07.1-rc1.4.3", "2026.07.1-rc1.4.10"), false,
     "older data bundle must still require migration")
@@ -224,16 +224,16 @@ local mixed_code_data_releases = {
         },
     },
     {
-        tag_name = "v2026.07.1-rc1.4.13", prerelease = true, draft = false,
+        tag_name = "v2026.07.1-rc1.4.14", prerelease = true, draft = false,
         assets = {
-            { name = "wordwise.koplugin-v2026.07.1-rc1.4.13.zip", browser_download_url = "https://example.test/code.zip" },
-            { name = "wordwise.koplugin-v2026.07.1-rc1.4.13.zip.sha256", browser_download_url = "https://example.test/code.sha256" },
+            { name = "wordwise.koplugin-v2026.07.1-rc1.4.14.zip", browser_download_url = "https://example.test/code.zip" },
+            { name = "wordwise.koplugin-v2026.07.1-rc1.4.14.zip.sha256", browser_download_url = "https://example.test/code.sha256" },
         },
     },
 }
 assert_equal(Updater.selectCodeRelease(
     mixed_code_data_releases, "2026.07.1-rc1.4.10", true).tag_name,
-    "v2026.07.1-rc1.4.13",
+    "v2026.07.1-rc1.4.14",
     "older plugin with current RC1.4.12 data must select the code patch")
 assert_equal(Updater.isDatabaseVersionCurrent(
     "2026.07.1-rc1.4.12", "2026.07.1-rc1.4.12"), true,
@@ -296,4 +296,4 @@ assert_equal(
     nil,
     "RC1.4.5 must not offer itself as an update")
 
-print("RC1.4.13 updater logic tests: PASS")
+print("RC1.4.14 updater logic tests: PASS")
