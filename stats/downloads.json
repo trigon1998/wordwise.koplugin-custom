@@ -55,6 +55,41 @@
       "asset": "wordwise.koplugin-v2026.07.1-rc1.3.8.zip",
       "downloads": 2,
       "release": "v2026.07.1-rc1.3.8"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.3.9.zip",
+      "downloads": 1,
+      "release": "v2026.07.1-rc1.3.9"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.4.0.zip",
+      "downloads": 2,
+      "release": "v2026.07.1-rc1.4.0"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.4.1.zip",
+      "downloads": 1,
+      "release": "v2026.07.1-rc1.4.1"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.4.2.zip",
+      "downloads": 2,
+      "release": "v2026.07.1-rc1.4.2"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.4.3.zip",
+      "downloads": 3,
+      "release": "v2026.07.1-rc1.4.3"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.4.4.zip",
+      "downloads": 1,
+      "release": "v2026.07.1-rc1.4.4"
+    },
+    {
+      "asset": "wordwise.koplugin-v2026.07.1-rc1.4.5.zip",
+      "downloads": 0,
+      "release": "v2026.07.1-rc1.4.5"
     }
   ],
   "metric": "plugin_zip_downloads",
@@ -123,7 +158,11 @@
     {
       "date": "2026-08-24",
       "downloads": 24
+    },
+    {
+      "date": "2026-08-25",
+      "downloads": 34
     }
   ],
-  "updated_at": "2026-08-24T03:26:35.136847+00:00"
+  "updated_at": "2026-08-25T03:14:41.916209+00:00"
 }
